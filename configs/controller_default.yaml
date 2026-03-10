@@ -1,0 +1,7 @@
+controller:
+  prediction_horizon_minutes: 30
+  sustained_rise_steps: 3
+  target_glucose_mgdl: 110
+  correction_factor_mgdl_per_unit: 50
+  microbolus_fraction: 0.25
+  min_excursion_delta_mgdl: 15

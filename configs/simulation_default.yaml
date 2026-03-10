@@ -1,0 +1,10 @@
+simulation:
+  timestep_minutes: 5
+  duration_hours: 24
+  seed: 42
+
+scenario:
+  patient_profile: baseline_adult
+  meal_plan: standard_mixed_meals
+  cgm_noise_enabled: true
+  replayable: true

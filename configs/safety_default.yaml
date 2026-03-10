@@ -1,0 +1,6 @@
+safety:
+  max_bolus_per_interval_u: 0.30
+  max_iob_u: 3.00
+  hypo_suspend_threshold_mgdl: 85
+  hypo_prediction_horizon_minutes: 30
+  require_sustained_trend: true

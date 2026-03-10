@@ -1,0 +1,15 @@
+pump_profiles:
+  omnipod_like:
+    dose_increment_u: 0.05
+    delivery_latency_steps: 0
+    max_delivery_per_interval_u: 0.30
+
+  tandem_like:
+    dose_increment_u: 0.05
+    delivery_latency_steps: 0
+    max_delivery_per_interval_u: 0.30
+
+  medtronic_like:
+    dose_increment_u: 0.10
+    delivery_latency_steps: 0
+    max_delivery_per_interval_u: 0.30
