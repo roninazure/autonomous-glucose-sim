@@ -1,4 +1,4 @@
-# Autonomous Glucose Simulation
+# SWARM - Autonomous Glucose Simulation
 
 ## Purpose
 This repository contains a proof-of-concept simulation platform for evaluating autonomous insulin-dosing controller behavior using CGM time-series data in a sandbox environment.
