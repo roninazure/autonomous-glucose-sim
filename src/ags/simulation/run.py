@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from ags.simulation.engine import run_simulation
@@ -7,9 +8,14 @@ from ags.simulation.io import write_snapshots_csv
 from ags.simulation.scenarios import baseline_meal_scenario
 
 
+def build_output_path(repo_root: Path) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return repo_root / "experiments" / "outputs" / f"simulation_run_{timestamp}.csv"
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    output_path = repo_root / "experiments" / "outputs" / "simulation_run_001.csv"
+    output_path = build_output_path(repo_root)
 
     inputs = baseline_meal_scenario()
 
