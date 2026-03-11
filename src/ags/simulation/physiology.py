@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ags.simulation.insulin import decay_insulin_on_board, insulin_glucose_effect_mgdl
 from ags.simulation.state import MealEvent, SimulationInputs, SimulationSnapshot
 
 
@@ -41,7 +42,10 @@ def advance_physiology(
     )
 
     meal_glucose_effect = active_meal_carbs * inputs.carb_impact_mgdl_per_g
-    insulin_glucose_effect = snapshot.insulin_on_board_u * inputs.insulin_sensitivity_mgdl_per_unit * 0.05
+    insulin_glucose_effect = insulin_glucose_effect_mgdl(
+        insulin_on_board_u=snapshot.insulin_on_board_u,
+        insulin_sensitivity_mgdl_per_unit=inputs.insulin_sensitivity_mgdl_per_unit,
+    )
 
     glucose_delta = (
         meal_glucose_effect
@@ -50,7 +54,7 @@ def advance_physiology(
     )
 
     next_true_glucose = max(40.0, snapshot.true_glucose_mgdl + glucose_delta)
-    next_iob = max(0.0, snapshot.insulin_on_board_u * 0.95)
+    next_iob = decay_insulin_on_board(snapshot.insulin_on_board_u)
 
     return SimulationSnapshot(
         timestamp_min=next_time,
