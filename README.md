@@ -1,4 +1,4 @@
-# SWARM --- Autonomous Glucose Simulation
+# SWARM Bolus --- Autonomous Glucose Simulation
 
 ## Purpose
 
