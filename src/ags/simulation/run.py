@@ -4,21 +4,14 @@ from pathlib import Path
 
 from ags.simulation.engine import run_simulation
 from ags.simulation.io import write_snapshots_csv
-from ags.simulation.state import MealEvent, SimulationInputs
+from ags.simulation.scenarios import baseline_meal_scenario
 
 
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     output_path = repo_root / "experiments" / "outputs" / "simulation_run_001.csv"
 
-    inputs = SimulationInputs(
-        insulin_sensitivity_mgdl_per_unit=50.0,
-        carb_impact_mgdl_per_g=3.0,
-        baseline_drift_mgdl_per_step=0.0,
-        meal_events=[
-            MealEvent(timestamp_min=30, carbs_g=45.0, absorption_minutes=120),
-        ],
-    )
+    inputs = baseline_meal_scenario()
 
     snapshots = run_simulation(
         inputs=inputs,
