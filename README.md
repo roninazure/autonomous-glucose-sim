@@ -1,6 +1,6 @@
 <div align="center">
 
-# SWARM — Autonomous Glucose Simulation
+# SWARM Bolus — Autonomous Glucose Simulation
 
 <p>
   <strong>Research sandbox for autonomous glucose-control algorithm development</strong><br>
