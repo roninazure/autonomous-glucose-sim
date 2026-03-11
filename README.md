@@ -46,7 +46,7 @@
 
 ## <span>Purpose</span>
 
-SWARM is a research simulation platform for exploring autonomous glucose-control algorithms in a **fully sandboxed environment**.
+SWARM Bolus is a research simulation platform for exploring autonomous glucose-control algorithms in a **fully sandboxed environment**.
 
 The platform simulates glucose dynamics, CGM-like readings, and controller behavior so insulin-dosing strategies can be studied **without interacting with real medical devices**.
 
