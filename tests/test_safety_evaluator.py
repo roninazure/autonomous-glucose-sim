@@ -16,6 +16,7 @@ def test_evaluate_safety_clips_excessive_recommendation() -> None:
 
     decision = evaluate_safety(inputs, thresholds)
 
+    assert decision.status == "clipped"
     assert decision.allowed is True
     assert decision.final_units == 1.0
     assert decision.reason == "recommendation clipped to max units per interval"
@@ -30,6 +31,7 @@ def test_evaluate_safety_blocks_low_predicted_glucose() -> None:
 
     decision = evaluate_safety(inputs)
 
+    assert decision.status == "blocked"
     assert decision.allowed is False
     assert decision.final_units == 0.0
     assert decision.reason == "predicted glucose below safety threshold"
@@ -44,6 +46,7 @@ def test_evaluate_safety_blocks_high_iob() -> None:
 
     decision = evaluate_safety(inputs)
 
+    assert decision.status == "blocked"
     assert decision.allowed is False
     assert decision.final_units == 0.0
     assert decision.reason == "insulin on board exceeds safety threshold"

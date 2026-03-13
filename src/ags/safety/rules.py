@@ -8,6 +8,7 @@ def apply_no_dose_guard(
 ) -> SafetyDecision | None:
     if inputs.recommended_units <= 0:
         return SafetyDecision(
+            status="blocked",
             allowed=False,
             final_units=0.0,
             reason="no positive recommendation to deliver",
@@ -21,6 +22,7 @@ def apply_hypoglycemia_guard(
 ) -> SafetyDecision | None:
     if inputs.predicted_glucose_mgdl < thresholds.min_predicted_glucose_mgdl:
         return SafetyDecision(
+            status="blocked",
             allowed=False,
             final_units=0.0,
             reason="predicted glucose below safety threshold",
@@ -34,6 +36,7 @@ def apply_iob_guard(
 ) -> SafetyDecision | None:
     if inputs.insulin_on_board_u >= thresholds.max_insulin_on_board_u:
         return SafetyDecision(
+            status="blocked",
             allowed=False,
             final_units=0.0,
             reason="insulin on board exceeds safety threshold",
@@ -49,12 +52,14 @@ def apply_max_interval_cap(
 
     if final_units < inputs.recommended_units:
         return SafetyDecision(
+            status="clipped",
             allowed=True,
             final_units=final_units,
             reason="recommendation clipped to max units per interval",
         )
 
     return SafetyDecision(
+        status="allowed",
         allowed=True,
         final_units=final_units,
         reason="recommendation allowed",

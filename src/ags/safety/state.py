@@ -19,6 +19,7 @@ class SafetyThresholds:
 
 @dataclass
 class SafetyDecision:
+    status: str
     allowed: bool
     final_units: float
     reason: str

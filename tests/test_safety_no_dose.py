@@ -11,6 +11,7 @@ def test_evaluate_safety_blocks_zero_recommendation() -> None:
 
     decision = evaluate_safety(inputs)
 
+    assert decision.status == "blocked"
     assert decision.allowed is False
     assert decision.final_units == 0.0
     assert decision.reason == "no positive recommendation to deliver"
