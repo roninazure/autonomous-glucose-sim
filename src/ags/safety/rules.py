@@ -3,6 +3,18 @@ from __future__ import annotations
 from ags.safety.state import SafetyDecision, SafetyInputs, SafetyThresholds
 
 
+def apply_no_dose_guard(
+    inputs: SafetyInputs,
+) -> SafetyDecision | None:
+    if inputs.recommended_units <= 0:
+        return SafetyDecision(
+            allowed=False,
+            final_units=0.0,
+            reason="no positive recommendation to deliver",
+        )
+    return None
+
+
 def apply_hypoglycemia_guard(
     inputs: SafetyInputs,
     thresholds: SafetyThresholds,
