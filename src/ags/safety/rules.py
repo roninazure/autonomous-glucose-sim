@@ -16,6 +16,20 @@ def apply_no_dose_guard(
     return None
 
 
+def apply_trend_confirmation_guard(
+    inputs: SafetyInputs,
+    thresholds: SafetyThresholds,
+) -> SafetyDecision | None:
+    if thresholds.require_confirmed_trend and not inputs.trend_confirmed:
+        return SafetyDecision(
+            status="blocked",
+            allowed=False,
+            final_units=0.0,
+            reason="trend not confirmed for dosing",
+        )
+    return None
+
+
 def apply_hypoglycemia_guard(
     inputs: SafetyInputs,
     thresholds: SafetyThresholds,

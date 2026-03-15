@@ -8,6 +8,7 @@ class SafetyInputs:
     recommended_units: float
     predicted_glucose_mgdl: float
     insulin_on_board_u: float
+    trend_confirmed: bool = True
 
 
 @dataclass
@@ -15,6 +16,7 @@ class SafetyThresholds:
     max_units_per_interval: float = 1.0
     max_insulin_on_board_u: float = 3.0
     min_predicted_glucose_mgdl: float = 80.0
+    require_confirmed_trend: bool = True
 
 
 @dataclass

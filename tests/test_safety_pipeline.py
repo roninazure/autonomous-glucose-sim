@@ -6,7 +6,7 @@ from ags.safety.state import SafetyThresholds
 def test_run_controller_with_safety_allows_recommendation() -> None:
     controller_inputs = ControllerInputs(
         current_glucose_mgdl=120.0,
-        previous_glucose_mgdl=119.0,
+        previous_glucose_mgdl=114.0,
         insulin_on_board_u=0.5,
         target_glucose_mgdl=110.0,
         correction_factor_mgdl_per_unit=50.0,
@@ -23,12 +23,12 @@ def test_run_controller_with_safety_allows_recommendation() -> None:
         safety_thresholds=safety_thresholds,
     )
 
-    assert signal.glucose_delta_mgdl == 1.0
-    assert prediction.predicted_glucose_mgdl == 126.0
-    assert recommendation.recommended_units == 0.32
+    assert signal.glucose_delta_mgdl == 6.0
+    assert prediction.predicted_glucose_mgdl == 156.0
+    assert recommendation.recommended_units == 0.92
     assert safety_decision.status == "allowed"
     assert safety_decision.allowed is True
-    assert safety_decision.final_units == 0.32
+    assert safety_decision.final_units == 0.92
     assert safety_decision.reason == "recommendation allowed"
 
 

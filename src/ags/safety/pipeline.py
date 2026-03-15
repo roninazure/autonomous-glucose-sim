@@ -16,6 +16,7 @@ def run_controller_with_safety(
     safety_inputs = build_safety_inputs(
         recommendation=recommendation,
         prediction=prediction,
+        signal=signal,
         insulin_on_board_u=controller_inputs.insulin_on_board_u,
     )
 
