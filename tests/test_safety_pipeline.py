@@ -59,3 +59,32 @@ def test_run_controller_with_safety_blocks_high_iob() -> None:
     assert safety_decision.allowed is False
     assert safety_decision.final_units == 0.0
     assert safety_decision.reason == "insulin on board exceeds safety threshold"
+
+
+def test_run_controller_with_safety_blocks_low_predicted_glucose() -> None:
+    controller_inputs = ControllerInputs(
+        current_glucose_mgdl=90.0,
+        previous_glucose_mgdl=85.0,
+        insulin_on_board_u=0.5,
+        target_glucose_mgdl=110.0,
+        correction_factor_mgdl_per_unit=50.0,
+    )
+
+    safety_thresholds = SafetyThresholds(
+        max_units_per_interval=1.0,
+        max_insulin_on_board_u=3.0,
+        min_predicted_glucose_mgdl=130.0,
+    )
+
+    signal, prediction, recommendation, safety_decision = run_controller_with_safety(
+        controller_inputs=controller_inputs,
+        safety_thresholds=safety_thresholds,
+    )
+
+    assert signal.glucose_delta_mgdl == 5.0
+    assert prediction.predicted_glucose_mgdl == 120.0
+    assert recommendation.recommended_units == 0.2
+    assert safety_decision.status == "blocked"
+    assert safety_decision.allowed is False
+    assert safety_decision.final_units == 0.0
+    assert safety_decision.reason == "predicted glucose below safety threshold"
