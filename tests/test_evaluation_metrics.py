@@ -39,6 +39,10 @@ def test_summarize_run_counts_ranges_and_decisions() -> None:
     assert summary.time_in_range_steps == 1
     assert summary.time_above_range_steps == 1
     assert summary.time_below_range_steps == 1
+    assert summary.percent_time_in_range == 33.33
+    assert summary.average_cgm_glucose_mgdl == 116.67
+    assert summary.peak_cgm_glucose_mgdl == 185.0
+    assert summary.total_recommended_insulin_u == 2.5
     assert summary.total_insulin_delivered_u == 1.5
     assert summary.blocked_decisions == 1
     assert summary.clipped_decisions == 1

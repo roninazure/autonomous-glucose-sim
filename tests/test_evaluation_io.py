@@ -31,6 +31,10 @@ def test_write_timestep_records_csv_and_summary_json(tmp_path: Path) -> None:
         time_in_range_steps=1,
         time_above_range_steps=1,
         time_below_range_steps=0,
+        percent_time_in_range=50.0,
+        average_cgm_glucose_mgdl=141.5,
+        peak_cgm_glucose_mgdl=182.0,
+        total_recommended_insulin_u=1.7,
         total_insulin_delivered_u=1.5,
         blocked_decisions=0,
         clipped_decisions=1,
@@ -52,4 +56,8 @@ def test_write_timestep_records_csv_and_summary_json(tmp_path: Path) -> None:
 
     json_text = json_path.read_text(encoding="utf-8")
     assert '"total_timesteps": 2' in json_text
+    assert '"percent_time_in_range": 50.0' in json_text
+    assert '"average_cgm_glucose_mgdl": 141.5' in json_text
+    assert '"peak_cgm_glucose_mgdl": 182.0' in json_text
+    assert '"total_recommended_insulin_u": 1.7' in json_text
     assert '"total_insulin_delivered_u": 1.5' in json_text
