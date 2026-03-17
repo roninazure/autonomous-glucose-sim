@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
+
+from ags.evaluation.io import write_run_summary_json, write_timestep_records_csv
 from ags.evaluation.runner import run_evaluation
 from ags.simulation.scenarios import baseline_meal_scenario
 
 
 def main() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    records_path = repo_root / "experiments" / "outputs" / f"evaluation_records_{timestamp}.csv"
+    summary_path = repo_root / "experiments" / "outputs" / f"evaluation_summary_{timestamp}.json"
+
     simulation_inputs = baseline_meal_scenario()
 
     records, summary = run_evaluation(
@@ -14,8 +23,13 @@ def main() -> None:
         seed=42,
     )
 
+    write_timestep_records_csv(records, records_path)
+    write_run_summary_json(summary, summary_path)
+
     print("Evaluation demo")
     print("=" * 24)
+    print(f"Records written to: {records_path}")
+    print(f"Summary written to: {summary_path}")
     print(f"Total records: {len(records)}")
     print(f"Time in range steps: {summary.time_in_range_steps}")
     print(f"Time above range steps: {summary.time_above_range_steps}")
