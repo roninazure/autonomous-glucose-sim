@@ -25,6 +25,8 @@ st.set_page_config(
 
 st.title("SWARM Bolus")
 st.subheader("Autonomous Glucose Simulation Dashboard")
+st.caption("AI-driven insulin decision engine with safety constraints and explainability")
+st.markdown("---")
 
 with st.sidebar:
     st.header("Simulation Controls")
@@ -130,6 +132,22 @@ if run_button:
     metric_7.metric("Blocked Decisions", summary.blocked_decisions)
     metric_8.metric("Clipped Decisions", summary.clipped_decisions)
 
+    st.markdown("### Clinical Outcome Summary")
+    outcome_1, outcome_2, outcome_3 = st.columns(3)
+    hypo_events = int((records_df["true_glucose_mgdl"] < 70).sum())
+    hyper_events = int((records_df["true_glucose_mgdl"] > 180).sum())
+    outcome_1.metric("Hypoglycemia Events (<70)", hypo_events)
+    outcome_2.metric("Hyperglycemia Events (>180)", hyper_events)
+    outcome_3.metric("Time in Safe Range", f"{summary.percent_time_in_range:.2f}%")
+
+    st.markdown("### System Behavior Insight")
+    if summary.blocked_decisions > summary.clipped_decisions:
+        st.warning("System is highly conservative — many recommendations are being blocked.")
+    elif summary.clipped_decisions > summary.blocked_decisions:
+        st.info("System frequently adjusts dosing to stay within safety or pump limits.")
+    else:
+        st.success("System is relatively balanced between safety enforcement and delivery.")
+
     st.markdown("### Glucose Trace")
     st.line_chart(
         records_df.set_index("timestamp_min")[["true_glucose_mgdl", "cgm_glucose_mgdl"]]
@@ -143,6 +161,33 @@ if run_button:
     st.markdown("### Safety Decision Counts")
     safety_counts = records_df["safety_status"].value_counts()
     st.bar_chart(safety_counts)
+
+    st.markdown("### Run Configuration Snapshot")
+    config_df = pd.DataFrame(
+        {
+            "Setting": [
+                "Duration (min)",
+                "Timestep (min)",
+                "Max Units / Interval",
+                "Max IOB",
+                "Min Predicted Glucose",
+                "Require Confirmed Trend",
+                "Pump Dose Increment",
+                "Pump Max Units / Interval",
+            ],
+            "Value": [
+                duration_minutes,
+                step_minutes,
+                max_units_per_interval,
+                max_insulin_on_board_u,
+                min_predicted_glucose_mgdl,
+                require_confirmed_trend,
+                dose_increment_u,
+                pump_max_units_per_interval,
+            ],
+        }
+    )
+    st.dataframe(config_df, width="stretch")
 
     st.markdown("### Decision Explainability")
     explain_df = records_df[
