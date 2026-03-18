@@ -15,12 +15,57 @@ from ags.evaluation.runner import run_evaluation
 from ags.pump.state import PumpConfig
 from ags.safety.state import SafetyThresholds
 from ags.simulation.scenarios import baseline_meal_scenario
+from ags.simulation.state import MealEvent, SimulationInputs
+
+
+def build_scenario(name: str) -> SimulationInputs:
+    if name == "Baseline Meal":
+        return baseline_meal_scenario()
+
+    if name == "Fasting Baseline":
+        return SimulationInputs(
+            insulin_sensitivity_mgdl_per_unit=50.0,
+            carb_impact_mgdl_per_g=3.0,
+            baseline_drift_mgdl_per_step=0.0,
+            meal_events=[],
+        )
+
+    if name == "Large Meal Spike":
+        return SimulationInputs(
+            insulin_sensitivity_mgdl_per_unit=50.0,
+            carb_impact_mgdl_per_g=3.0,
+            baseline_drift_mgdl_per_step=0.0,
+            meal_events=[
+                MealEvent(timestamp_min=30, carbs_g=90.0, absorption_minutes=150),
+            ],
+        )
+
+    return baseline_meal_scenario()
 
 
 st.set_page_config(
     page_title="SWARM Bolus",
     page_icon="🧪",
     layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+    ::-webkit-scrollbar {
+        width: 16px;
+        height: 16px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #666;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 st.title("SWARM Bolus")
@@ -30,6 +75,16 @@ st.markdown("---")
 
 with st.sidebar:
     st.header("Simulation Controls")
+
+    scenario_name = st.selectbox(
+        "Scenario",
+        options=[
+            "Baseline Meal",
+            "Fasting Baseline",
+            "Large Meal Spike",
+        ],
+        index=0,
+    )
 
     duration_minutes = st.slider(
         "Duration (minutes)",
@@ -95,7 +150,7 @@ with st.sidebar:
     run_button = st.button("Run Evaluation", type="primary")
 
 if run_button:
-    simulation_inputs = baseline_meal_scenario()
+    simulation_inputs = build_scenario(scenario_name)
 
     safety_thresholds = SafetyThresholds(
         max_units_per_interval=max_units_per_interval,
@@ -119,6 +174,8 @@ if run_button:
     )
 
     records_df = pd.DataFrame([r.__dict__ for r in records])
+
+    st.markdown(f"### Scenario: {scenario_name}")
 
     metric_1, metric_2, metric_3, metric_4 = st.columns(4)
     metric_1.metric("Simulation Steps", summary.total_timesteps)
@@ -166,6 +223,7 @@ if run_button:
     config_df = pd.DataFrame(
         {
             "Setting": [
+                "Scenario",
                 "Duration (min)",
                 "Timestep (min)",
                 "Max Units / Interval",
@@ -176,14 +234,15 @@ if run_button:
                 "Pump Max Units / Interval",
             ],
             "Value": [
-                duration_minutes,
-                step_minutes,
-                max_units_per_interval,
-                max_insulin_on_board_u,
-                min_predicted_glucose_mgdl,
-                require_confirmed_trend,
-                dose_increment_u,
-                pump_max_units_per_interval,
+                str(scenario_name),
+                str(duration_minutes),
+                str(step_minutes),
+                str(max_units_per_interval),
+                str(max_insulin_on_board_u),
+                str(min_predicted_glucose_mgdl),
+                str(require_confirmed_trend),
+                str(dose_increment_u),
+                str(pump_max_units_per_interval),
             ],
         }
     )
