@@ -268,4 +268,4 @@ Insulin dosing is one of the most consequential, error-prone, and cognitively de
 <sub><strong>SWARM Bolus</strong> &nbsp;·&nbsp; simulation-first &nbsp;·&nbsp; safety-obsessed &nbsp;·&nbsp; clinically rigorous</sub>
 
 </div>
-````
+
