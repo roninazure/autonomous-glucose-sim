@@ -1,344 +1,271 @@
 <div align="center">
 
-# SWARM Bolus — Autonomous Glucose Simulation
+<!-- ANIMATED HEADER BANNER -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://capsule-render.vercel.app/api?type=waving&color=0:0a0f1a,100:00ffb4&height=180&section=header&text=SWARM%20Bolus&fontSize=52&fontColor=ffffff&fontAlignY=38&animation=fadeIn&desc=Autonomous%20Glucose%20Intelligence%20%E2%80%94%20Closed-Loop%20Simulation%20Platform&descAlignY=58&descSize=14&descColor=00d48a">
+  <source media="(prefers-color-scheme: light)" srcset="https://capsule-render.vercel.app/api?type=waving&color=0:e8f5f0,100:00d48a&height=180&section=header&text=SWARM%20Bolus&fontSize=52&fontColor=0a0f1a&fontAlignY=38&animation=fadeIn&desc=Autonomous%20Glucose%20Intelligence%20%E2%80%94%20Closed-Loop%20Simulation%20Platform&descAlignY=58&descSize=14&descColor=006644">
+  <img alt="SWARM Bolus Banner" src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0f1a,100:00ffb4&height=180&section=header&text=SWARM%20Bolus&fontSize=52&fontColor=ffffff&fontAlignY=38&animation=fadeIn&desc=Autonomous%20Glucose%20Intelligence%20%E2%80%94%20Closed-Loop%20Simulation%20Platform&descAlignY=58&descSize=14&descColor=00d48a" width="100%">
+</picture>
 
-<p>
-  <strong>Simulation platform for autonomous insulin-control algorithm development</strong><br>
-  CGM simulation • controller prototyping • safety-first architecture • clinical evaluation
-</p>
+<br/>
 
-<p>
-  <img alt="Phase" src="https://img.shields.io/badge/Phase-3%20Controller%20Prototype-blue">
-  <img alt="Status" src="https://img.shields.io/badge/Status-Active%20Development-success">
-  <img alt="Mode" src="https://img.shields.io/badge/Mode-Simulation%20Only-important">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-informational">
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-Passing-success">
-</p>
+<!-- BADGES ROW 1: PROJECT STATUS -->
+![Phase](https://img.shields.io/badge/Phase-3%20%E2%80%94%20Controller%20Prototype-00ffb4?style=flat-square&labelColor=0d1117)
+![Status](https://img.shields.io/badge/Status-Active%20Development-00d48a?style=flat-square&labelColor=0d1117)
+![Boundary](https://img.shields.io/badge/%E2%9A%A0%EF%B8%8F%20Boundary-Simulation%20Only-ff4d6d?style=flat-square&labelColor=0d1117)
+
+<!-- BADGES ROW 2: TECH -->
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?style=flat-square&logo=python&logoColor=white&labelColor=0d1117)
+![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-ff4b4b?style=flat-square&logo=streamlit&logoColor=white&labelColor=0d1117)
+![Tests](https://img.shields.io/badge/Tests-Passing-00d48a?style=flat-square&logo=pytest&logoColor=white&labelColor=0d1117)
+![License](https://img.shields.io/badge/License-Research%20Only-6b7784?style=flat-square&labelColor=0d1117)
+
+<br/>
+<br/>
+
+> **Simulation-first platform for building an autonomous insulin dosing engine.**  
+> Iterate on glucose dynamics, decision logic, and safety constraints — in a controlled, non-clinical environment.
+
+<br/>
 
 </div>
 
 ---
 
-## 🧠 What This Is
+## ⬡ &nbsp;Safety Boundary
 
-SWARM Bolus is a **simulation-first platform for building an autonomous insulin dosing engine**.
+<table>
+<tr>
+<td>
 
-It enables engineers and clinicians to evaluate:
-- glucose dynamics
-- insulin decision logic
-- safety constraints
-- delivery behavior
+This is **simulation-only research software**. Nothing in this repository:
 
-All in a **controlled, non-clinical environment**.
+- ✕ &nbsp;Controls real insulin pumps
+- ✕ &nbsp;Interfaces with CGM hardware
+- ✕ &nbsp;Provides medical advice or treatment
+- ✕ &nbsp;Delivers insulin to any person
 
----
+All outputs are synthetic. No clinical deployment before full regulatory validation.
 
-## ⚠️ Safety Boundary
-
-This system:
-
-- ❌ does NOT control real insulin pumps  
-- ❌ does NOT connect to CGM hardware  
-- ❌ does NOT provide medical advice  
-- ❌ does NOT deliver treatment  
-
-This is **simulation-only research software**.
+</td>
+</tr>
+</table>
 
 ---
 
-## 🎯 What We Have Built
+## &nbsp;What This Is
 
-A complete **closed-loop simulation stack**:
+SWARM Bolus is a **closed-loop simulation stack** that mirrors a real AID system architecture exactly — with every component replaceable by its hardware counterpart once pre-clinical validation is complete.
 
-1. **Physiology Engine** → models glucose behavior  
-2. **CGM Sensor Model** → generates noisy readings  
-3. **Controller** → recommends insulin  
-4. **Safety Layer** → blocks/clips unsafe dosing  
-5. **Pump Abstraction** → enforces delivery constraints  
-6. **Evaluation Layer** → produces clinical-style metrics  
+The core evaluation primitive is **Scenario A vs Scenario B**: same algorithm, same constraints, different conditions. This enables controlled, reproducible testing of meal impact, fasting response, and glucose excursion behavior.
 
 ---
 
-## 🏗️ Architecture
+## &nbsp;Closed-Loop Architecture
 
 ```
-Scenario Inputs
-      ↓
-Physiology Engine
-      ↓
-True Glucose
-      ↓
-CGM Sensor Model
-      ↓
-Controller (Decision Engine)
-      ↓
-Safety Layer
-      ↓
-Pump Abstraction
-      ↓
-Evaluation + Visualization
+┌─────────────────────────────────────────────────┐
+│                  Scenario Input                  │
+│        (meal events · patient params · horizon)  │
+└─────────────────────┬───────────────────────────┘
+                      │
+                      ▼
+              ┌───────────────┐
+              │  Physiology   │  ← Bergman 3-compartment model
+              │    Engine     │     glucose–insulin dynamics
+              └───────┬───────┘
+                      │ ground-truth glucose
+                      ▼
+              ┌───────────────┐
+              │  CGM Sensor   │  ← Gaussian noise · interstitial lag
+              │    Model      │     calibration drift
+              └───────┬───────┘
+                      │ sensor readings
+                      ▼
+              ┌───────────────┐
+              │  Controller   │  ← Rule-based + ML-ready
+              │ Decision Eng. │     bolus / basal recommendations
+              └───────┬───────┘
+                      │ recommended dose
+                      ▼
+         ┌────────────────────────┐
+         │  ⬡  Safety Layer  ⬡   │  ← IOB tracking · hypo prediction
+         │  [CRITICAL PATH]       │     hard clamps · override logic
+         └────────────┬───────────┘
+                      │ safe dose
+                      ▼
+              ┌───────────────┐
+              │    Pump       │  ← Rate limits · delivery constraints
+              │  Abstraction  │     infusion modeling
+              └───────┬───────┘
+                      │
+                      ▼
+        ┌──────────────────────────┐
+        │  Evaluation + Viz Layer  │  ← Clinical metrics · AI verdict
+        │  Streamlit Dashboard     │     scenario comparison report
+        └──────────────────────────┘
 ```
 
 ---
 
-## ⚡ Core Capability: Scenario Comparison
+## &nbsp;Clinical Metrics
 
-Run **Scenario A vs Scenario B**:
+Every simulation run emits a full clinical-grade metrics payload:
 
-- Same algorithm
-- Same constraints
-- Different conditions
+| Metric | Target | Description |
+|:--|:--|:--|
+| `time_in_range` | **> 70%** | % of readings 70–180 mg/dL *(ADA/EASD standard)* |
+| `cgm_mean` | 80–140 | Mean sensor glucose across simulation window |
+| `cgm_peak` | < 250 | Maximum excursion — hyperglycemia severity |
+| `time_above_250` | < 1% | Severe hyperglycemia exposure (minutes) |
+| `glucose_sd` | < 36 | Glycemic variability — lower = more stable control |
+| `insulin_recommended` | — | Raw controller output before safety processing |
+| `insulin_delivered` | — | Actual delivery post safety layer + pump model |
+| `blocked_decisions` | → 0 | Controller requests fully rejected by safety |
+| `clipped_decisions` | → low | Controller requests reduced *(not blocked)* by safety |
 
-This allows controlled testing of:
-- meal impact
-- fasting response
-- extreme glucose excursions
-
----
-
-## 📊 Clinical Metrics Layer
-
-Each run produces:
-
-| Metric | Meaning |
-|------|--------|
-| Time in Range % | % of time 70–180 mg/dL |
-| Average CGM | Mean glucose |
-| Peak CGM | Max excursion |
-| Time Above 250 | Severe hyperglycemia exposure |
-| Glucose Variability (SD) | Stability |
-| Recommended Insulin | Controller output |
-| Delivered Insulin | After safety/pump |
-| Blocked Decisions | Fully stopped |
-| Clipped Decisions | Reduced dosing |
+The system generates a **plain-English AI comparative verdict** covering spike severity, insulin demand delta, safety intervention frequency, and overall control quality.
 
 ---
 
-## 🧠 AI Comparative Verdict
-
-The system generates a **plain-English interpretation**:
-
-- better vs worse control
-- spike severity
-- insulin demand differences
-- safety intervention frequency
-
-This is an **assistive interpretation layer**.
-
----
-
-## 🖥️ Streamlit Dashboard
-
-Run:
+## &nbsp;Quickstart
 
 ```bash
-streamlit run app.py
+# clone & install
+git clone https://github.com/scottsteele/swarm-bolus
+cd swarm-bolus && pip install -r requirements.txt
 ```
 
-### Dashboard includes:
-
-- Scenario comparison controls
-- Clinical summary cards
-- Metric comparison table
-- CGM trajectory visualization
-- Insulin delivery comparison
-- Safety intervention overlay
-- AI-generated verdict
-
----
-
-## 🧪 Example Use Case
-
-Compare:
-
-- Baseline Meal vs Large Meal Spike
-
-Evaluate:
-
-- glucose rise magnitude
-- insulin required
-- safety intervention frequency
-- control stability
-
----
-
-## 🚀 How to Run
-
-### Simulation
 ```bash
+# run simulation engine
 PYTHONPATH=src python -m ags.simulation.run
-```
 
-### Controller
-```bash
+# run controller
 PYTHONPATH=src python -m ags.controller.run
-```
 
-### UI
-```bash
+# launch dashboard
 streamlit run app.py
-```
 
-### Tests
-```bash
+# test suite
 PYTHONPATH=src pytest -q
 ```
 
 ---
 
-## 📁 Structure
+## &nbsp;Project Structure
 
 ```
 src/
-  ags/
-    controller/
-    evaluation/
-    pump/
-    safety/
-    simulation/
-    scenarios/
+└── ags/
+    ├── simulation/    ← physiology engine · CGM model · scenario runner
+    ├── controller/    ← decision engine · insulin recommendation logic
+    ├── safety/        ← hard constraints · IOB tracking · hypo prediction
+    ├── pump/          ← delivery abstraction · rate modeling
+    ├── evaluation/    ← metrics · AI verdict · clinical report
+    └── scenarios/     ← meal presets · fasting · extremes
 
 tests/
 docs/
 experiments/
+app.py             ← Streamlit dashboard entrypoint
 ```
 
 ---
 
-# 🧬 FDA Pathway Thinking (Early Strategy)
+## &nbsp;FDA Pathway Strategy
 
-This project is being designed with a **future regulated medical-device pathway in mind**.
+Built from day one for a future **Software as a Medical Device (SaMD)** classification — likely **Class II** via FDA 510(k) or De Novo, comparable to existing hybrid closed-loop AID systems.
 
-### Likely classification
-- Software as a Medical Device (SaMD)
-- Potentially Class II (similar to insulin dosing support / AID systems)
+**Required evolution toward clinical use:**
 
----
+<details>
+<summary><strong>01 &nbsp;·&nbsp; Algorithm Validation</strong></summary>
+<br/>
 
-## Required evolution toward clinical use
+- Large-scale simulation testing across diverse patient profiles
+- Edge-case coverage: hypo/hyper extremes, missed meals, pump occlusions
+- Cross-scenario repeatability and statistical robustness
 
-### 1. Algorithm Validation
-- large-scale simulation testing
-- edge-case coverage (hypo/hyper extremes)
-- repeatability across scenarios
+</details>
 
-### 2. Safety Layer Maturity
-- insulin-on-board modeling
-- hypoglycemia prediction
-- hard safety constraints
-- override logic
+<details>
+<summary><strong>02 &nbsp;·&nbsp; Safety Layer Maturity</strong></summary>
+<br/>
 
-### 3. Human Factors / UX
-- explainability of decisions
-- clinician interpretability
-- auditability of outputs
+- Insulin-on-board (IOB) modeling — complete
+- Predictive hypoglycemia suspension logic
+- Hard safety constraint architecture
+- Clinician override logging and auditability
 
-### 4. Data & Clinical Evidence
-- retrospective dataset validation
-- controlled pilot studies
-- outcome comparison vs standard care
+</details>
 
-### 5. Regulatory Pathway
-- FDA 510(k) or De Novo pathway (depending on claims)
-- alignment with existing AID systems (e.g., hybrid closed loop)
+<details>
+<summary><strong>03 &nbsp;·&nbsp; Human Factors & Explainability</strong></summary>
+<br/>
 
----
+- Decision explainability layer for every controller recommendation
+- Clinician-readable output format
+- Full auditability of safety interventions
 
-## Key design principle
+</details>
 
-> Build the **decision engine + safety logic in simulation first**, then validate, then integrate.
+<details>
+<summary><strong>04 &nbsp;·&nbsp; Clinical Evidence</strong></summary>
+<br/>
 
-This repo represents the **pre-clinical algorithm validation layer**.
+- Retrospective dataset validation against real CGM traces
+- Controlled simulation pilot studies
+- Outcome comparison vs. standard-of-care heuristics
 
----
+</details>
 
-# 📈 Pitch Deck (Condensed)
+<details>
+<summary><strong>05 &nbsp;·&nbsp; Regulatory Filing</strong></summary>
+<br/>
 
-## Problem
+- FDA 510(k) or De Novo pathway (predicated on final claims)
+- Pre-submission meeting alignment
+- Comparable device analysis (existing AID systems: Omnipod 5, Control-IQ, etc.)
 
-- Insulin dosing remains **complex, error-prone, and manual**
-- Patients and clinicians rely on:
-  - heuristics
-  - delayed CGM interpretation
-  - non-adaptive strategies
-
-Result:
-- glucose variability
-- hyperglycemia exposure
-- hypoglycemia risk
+</details>
 
 ---
 
-## Solution
+## &nbsp;The Thesis
 
-SWARM Bolus is a **simulation-trained autonomous insulin decision engine**.
+> *Build the decision engine first. Validate it in simulation. Then deploy it into reality.*
 
-It:
-- continuously evaluates glucose trends
-- predicts short-term trajectory
-- recommends dosing
-- enforces safety constraints
+Insulin dosing is one of the most consequential, error-prone, and cognitively demanding tasks in chronic disease management. SWARM Bolus is the **pre-clinical algorithm validation layer** for a future fully autonomous insulin dosing brain — one that integrates with any CGM and pump, adapts per patient, continuously learns, and operates safely inside regulatory frameworks.
+
+**One-line pitch:** We are building the decision engine that powers the future of autonomous insulin delivery — starting in simulation, validated before reality.
 
 ---
 
-## Why This Approach Wins
+## &nbsp;Build Status
 
-- simulation-first → safe iteration
-- measurable outcomes → clinical metrics
-- explainable decisions → clinician trust
-- modular architecture → device-agnostic
-
----
-
-## Current Stage
-
-- fully working simulation engine
-- controller prototype complete
-- comparison + evaluation framework live
-- UI for real-time scenario testing
-
----
-
-## What’s Next
-
-- safety layer expansion
-- pump behavior realism
-- risk scoring system
-- dataset validation
-- clinician-in-the-loop testing
-
----
-
-## Long-Term Vision
-
-A **fully autonomous insulin dosing brain** that can:
-
-- integrate with CGMs and pumps
-- adapt per patient
-- continuously learn
-- operate safely within regulatory frameworks
-
----
-
-## One-Line Pitch
-
-> We are building the decision engine that powers the future of autonomous insulin delivery — starting in simulation, validated before reality.
-
----
-
-## 🧭 Status
-
-| Phase | Status |
-|------|--------|
-| Architecture | ✅ |
-| Simulation Engine | ✅ |
-| Controller | ✅ |
-| Safety Layer | 🟡 |
-| Pump Abstraction | 🟡 |
-| Evaluation Engine | 🟡 |
+| Component | Status |
+|:--|:--|
+| Architecture | ✅ Complete |
+| Simulation Engine | ✅ Complete |
+| Controller (Phase 3) | ✅ Complete |
+| Safety Layer | 🟡 In Progress |
+| Pump Abstraction | 🟡 In Progress |
+| Evaluation Engine | 🟡 In Progress |
+| Risk Scoring System | ⬜ Roadmap |
+| Dataset Validation | ⬜ Roadmap |
+| Clinician-in-the-Loop | ⬜ Roadmap |
 
 ---
 
 <div align="center">
-  <sub><strong>SWARM</strong> — build the brain first, validate it, then deploy it</sub>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://capsule-render.vercel.app/api?type=waving&color=0:00ffb4,100:0a0f1a&height=100&section=footer&reversal=false">
+  <source media="(prefers-color-scheme: light)" srcset="https://capsule-render.vercel.app/api?type=waving&color=0:00d48a,100:e8f5f0&height=100&section=footer&reversal=false">
+  <img alt="footer" src="https://capsule-render.vercel.app/api?type=waving&color=0:00ffb4,100:0a0f1a&height=100&section=footer" width="100%">
+</picture>
+
+<sub><strong>SWARM Bolus</strong> &nbsp;·&nbsp; simulation-first &nbsp;·&nbsp; safety-obsessed &nbsp;·&nbsp; clinically rigorous</sub>
+
 </div>
+````
