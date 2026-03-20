@@ -24,12 +24,12 @@ def test_summarize_run_counts_ranges_and_decisions() -> None:
         ),
         TimestepRecord(
             timestamp_min=15,
-            true_glucose_mgdl=65.0,
-            cgm_glucose_mgdl=65.0,
-            recommended_units=0.5,
+            true_glucose_mgdl=265.0,
+            cgm_glucose_mgdl=265.0,
+            recommended_units=1.5,
             safety_status="allowed",
-            safety_final_units=0.5,
-            pump_delivered_units=0.5,
+            safety_final_units=1.5,
+            pump_delivered_units=1.5,
         ),
     ]
 
@@ -37,13 +37,15 @@ def test_summarize_run_counts_ranges_and_decisions() -> None:
 
     assert summary.total_timesteps == 3
     assert summary.time_in_range_steps == 1
-    assert summary.time_above_range_steps == 1
-    assert summary.time_below_range_steps == 1
+    assert summary.time_above_range_steps == 2
+    assert summary.time_below_range_steps == 0
+    assert summary.time_above_250_steps == 1
     assert summary.percent_time_in_range == 33.33
-    assert summary.average_cgm_glucose_mgdl == 116.67
-    assert summary.peak_cgm_glucose_mgdl == 185.0
-    assert summary.total_recommended_insulin_u == 2.5
-    assert summary.total_insulin_delivered_u == 1.5
+    assert summary.average_cgm_glucose_mgdl == 183.33
+    assert summary.peak_cgm_glucose_mgdl == 265.0
+    assert summary.glucose_variability_sd_mgdl == 67.37
+    assert summary.total_recommended_insulin_u == 3.5
+    assert summary.total_insulin_delivered_u == 2.5
     assert summary.blocked_decisions == 1
     assert summary.clipped_decisions == 1
     assert summary.allowed_decisions == 1
