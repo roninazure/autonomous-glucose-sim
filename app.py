@@ -73,17 +73,25 @@ st.subheader("Autonomous Glucose Simulation Dashboard")
 st.caption("AI-driven insulin decision engine with safety constraints and explainability")
 st.markdown("---")
 
+scenario_options = [
+    "Baseline Meal",
+    "Fasting Baseline",
+    "Large Meal Spike",
+]
+
 with st.sidebar:
     st.header("Simulation Controls")
 
-    scenario_name = st.selectbox(
-        "Scenario",
-        options=[
-            "Baseline Meal",
-            "Fasting Baseline",
-            "Large Meal Spike",
-        ],
+    scenario_a_name = st.selectbox(
+        "Scenario A",
+        options=scenario_options,
         index=0,
+    )
+
+    scenario_b_name = st.selectbox(
+        "Scenario B",
+        options=scenario_options,
+        index=2,
     )
 
     duration_minutes = st.slider(
@@ -147,11 +155,9 @@ with st.sidebar:
         step=0.05,
     )
 
-    run_button = st.button("Run Evaluation", type="primary")
+    run_button = st.button("Run Comparison", type="primary")
 
 if run_button:
-    simulation_inputs = build_scenario(scenario_name)
-
     safety_thresholds = SafetyThresholds(
         max_units_per_interval=max_units_per_interval,
         max_insulin_on_board_u=max_insulin_on_board_u,
@@ -164,8 +170,8 @@ if run_button:
         max_units_per_interval=pump_max_units_per_interval,
     )
 
-    records, summary = run_evaluation(
-        simulation_inputs=simulation_inputs,
+    records_a, summary_a = run_evaluation(
+        simulation_inputs=build_scenario(scenario_a_name),
         safety_thresholds=safety_thresholds,
         pump_config=pump_config,
         duration_minutes=duration_minutes,
@@ -173,109 +179,158 @@ if run_button:
         seed=42,
     )
 
-    records_df = pd.DataFrame([r.__dict__ for r in records])
-
-    st.markdown(f"### Scenario: {scenario_name}")
-
-    metric_1, metric_2, metric_3, metric_4 = st.columns(4)
-    metric_1.metric("Simulation Steps", summary.total_timesteps)
-    metric_2.metric("Time in Range %", f"{summary.percent_time_in_range:.2f}%")
-    metric_3.metric("Avg CGM", f"{summary.average_cgm_glucose_mgdl:.2f} mg/dL")
-    metric_4.metric("Peak CGM", f"{summary.peak_cgm_glucose_mgdl:.2f} mg/dL")
-
-    metric_5, metric_6, metric_7, metric_8 = st.columns(4)
-    metric_5.metric("Recommended Insulin", f"{summary.total_recommended_insulin_u:.2f} U")
-    metric_6.metric("Delivered Insulin", f"{summary.total_insulin_delivered_u:.2f} U")
-    metric_7.metric("Blocked Decisions", summary.blocked_decisions)
-    metric_8.metric("Clipped Decisions", summary.clipped_decisions)
-
-    st.markdown("### Clinical Outcome Summary")
-    outcome_1, outcome_2, outcome_3 = st.columns(3)
-    hypo_events = int((records_df["true_glucose_mgdl"] < 70).sum())
-    hyper_events = int((records_df["true_glucose_mgdl"] > 180).sum())
-    outcome_1.metric("Hypoglycemia Events (<70)", hypo_events)
-    outcome_2.metric("Hyperglycemia Events (>180)", hyper_events)
-    outcome_3.metric("Time in Safe Range", f"{summary.percent_time_in_range:.2f}%")
-
-    st.markdown("### System Behavior Insight")
-    if summary.blocked_decisions > summary.clipped_decisions:
-        st.warning("System is highly conservative — many recommendations are being blocked.")
-    elif summary.clipped_decisions > summary.blocked_decisions:
-        st.info("System frequently adjusts dosing to stay within safety or pump limits.")
-    else:
-        st.success("System is relatively balanced between safety enforcement and delivery.")
-
-    st.markdown("### Glucose Trace")
-    st.line_chart(
-        records_df.set_index("timestamp_min")[["true_glucose_mgdl", "cgm_glucose_mgdl"]]
+    records_b, summary_b = run_evaluation(
+        simulation_inputs=build_scenario(scenario_b_name),
+        safety_thresholds=safety_thresholds,
+        pump_config=pump_config,
+        duration_minutes=duration_minutes,
+        step_minutes=step_minutes,
+        seed=42,
     )
 
-    st.markdown("### Insulin Trace")
-    st.line_chart(
-        records_df.set_index("timestamp_min")[["recommended_units", "pump_delivered_units"]]
-    )
+    records_a_df = pd.DataFrame([r.__dict__ for r in records_a])
+    records_b_df = pd.DataFrame([r.__dict__ for r in records_b])
 
-    st.markdown("### Safety Decision Counts")
-    safety_counts = records_df["safety_status"].value_counts()
-    st.bar_chart(safety_counts)
+    st.markdown("## Scenario Comparison")
 
-    st.markdown("### Run Configuration Snapshot")
-    config_df = pd.DataFrame(
+    left, right = st.columns(2)
+
+    with left:
+        st.markdown(f"### Scenario A: {scenario_a_name}")
+        a1, a2, a3, a4 = st.columns(4)
+        a1.metric("Steps", summary_a.total_timesteps)
+        a2.metric("Time in Range %", f"{summary_a.percent_time_in_range:.2f}%")
+        a3.metric("Avg CGM", f"{summary_a.average_cgm_glucose_mgdl:.2f}")
+        a4.metric("Peak CGM", f"{summary_a.peak_cgm_glucose_mgdl:.2f}")
+
+        a5, a6, a7, a8 = st.columns(4)
+        a5.metric("Recommended U", f"{summary_a.total_recommended_insulin_u:.2f}")
+        a6.metric("Delivered U", f"{summary_a.total_insulin_delivered_u:.2f}")
+        a7.metric("Blocked", summary_a.blocked_decisions)
+        a8.metric("Clipped", summary_a.clipped_decisions)
+
+    with right:
+        st.markdown(f"### Scenario B: {scenario_b_name}")
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("Steps", summary_b.total_timesteps)
+        b2.metric("Time in Range %", f"{summary_b.percent_time_in_range:.2f}%")
+        b3.metric("Avg CGM", f"{summary_b.average_cgm_glucose_mgdl:.2f}")
+        b4.metric("Peak CGM", f"{summary_b.peak_cgm_glucose_mgdl:.2f}")
+
+        b5, b6, b7, b8 = st.columns(4)
+        b5.metric("Recommended U", f"{summary_b.total_recommended_insulin_u:.2f}")
+        b6.metric("Delivered U", f"{summary_b.total_insulin_delivered_u:.2f}")
+        b7.metric("Blocked", summary_b.blocked_decisions)
+        b8.metric("Clipped", summary_b.clipped_decisions)
+
+    st.markdown("### Comparison Snapshot")
+    compare_df = pd.DataFrame(
         {
-            "Setting": [
-                "Scenario",
-                "Duration (min)",
-                "Timestep (min)",
-                "Max Units / Interval",
-                "Max IOB",
-                "Min Predicted Glucose",
-                "Require Confirmed Trend",
-                "Pump Dose Increment",
-                "Pump Max Units / Interval",
+            "Metric": [
+                "Time in Range %",
+                "Average CGM",
+                "Peak CGM",
+                "Time Above 250",
+                "Glucose Variability (SD)",
+                "Recommended Insulin",
+                "Delivered Insulin",
+                "Blocked Decisions",
+                "Clipped Decisions",
+                "Allowed Decisions",
             ],
-            "Value": [
-                str(scenario_name),
-                str(duration_minutes),
-                str(step_minutes),
-                str(max_units_per_interval),
-                str(max_insulin_on_board_u),
-                str(min_predicted_glucose_mgdl),
-                str(require_confirmed_trend),
-                str(dose_increment_u),
-                str(pump_max_units_per_interval),
+            "Scenario A": [
+                summary_a.percent_time_in_range,
+                summary_a.average_cgm_glucose_mgdl,
+                summary_a.peak_cgm_glucose_mgdl,
+                summary_a.time_above_250_steps,
+                summary_a.glucose_variability_sd_mgdl,
+                summary_a.total_recommended_insulin_u,
+                summary_a.total_insulin_delivered_u,
+                summary_a.blocked_decisions,
+                summary_a.clipped_decisions,
+                summary_a.allowed_decisions,
+            ],
+            "Scenario B": [
+                summary_b.percent_time_in_range,
+                summary_b.average_cgm_glucose_mgdl,
+                summary_b.peak_cgm_glucose_mgdl,
+                summary_b.time_above_250_steps,
+                summary_b.glucose_variability_sd_mgdl,
+                summary_b.total_recommended_insulin_u,
+                summary_b.total_insulin_delivered_u,
+                summary_b.blocked_decisions,
+                summary_b.clipped_decisions,
+                summary_b.allowed_decisions,
             ],
         }
     )
-    st.dataframe(config_df, width="stretch")
+    st.dataframe(compare_df, width="stretch")
 
-    st.markdown("### Decision Explainability")
-    explain_df = records_df[
-        [
-            "timestamp_min",
-            "cgm_glucose_mgdl",
-            "recommended_units",
-            "safety_status",
-            "safety_final_units",
-            "pump_delivered_units",
-        ]
-    ].copy()
-
-    explain_df["insulin_gap_u"] = (
-        explain_df["recommended_units"] - explain_df["pump_delivered_units"]
-    ).round(2)
-
-    explain_df["explanation"] = explain_df["safety_status"].map(
+    st.markdown("### CGM Trajectory Comparison")
+    cgm_compare_df = pd.DataFrame(
         {
-            "allowed": "Recommendation passed safety and pump delivery as expected.",
-            "clipped": "Recommendation exceeded a safety or pump delivery limit and was reduced.",
-            "blocked": "Recommendation was blocked by a safety rule before delivery.",
+            "time": records_a_df["timestamp_min"],
+            "Scenario A CGM": records_a_df["cgm_glucose_mgdl"],
+            "Scenario B CGM": records_b_df["cgm_glucose_mgdl"],
         }
-    )
+    ).set_index("time")
+    st.line_chart(cgm_compare_df)
 
-    st.dataframe(explain_df, width="stretch")
+    st.markdown("### Insulin Delivery Comparison")
+    insulin_compare_df = pd.DataFrame(
+        {
+            "time": records_a_df["timestamp_min"],
+            "Scenario A Recommended": records_a_df["recommended_units"],
+            "Scenario A Delivered": records_a_df["pump_delivered_units"],
+            "Scenario B Recommended": records_b_df["recommended_units"],
+            "Scenario B Delivered": records_b_df["pump_delivered_units"],
+        }
+    ).set_index("time")
+    st.line_chart(insulin_compare_df)
 
-    st.markdown("### Full Timestep Records")
-    st.dataframe(records_df, width="stretch")
+    st.markdown("### Safety Intervention Overlay")
+
+    safety_overlay_df = pd.DataFrame({
+        "time": records_a_df["timestamp_min"],
+        "A Blocked": (records_a_df["safety_status"] == "blocked").astype(int),
+        "A Clipped": (records_a_df["safety_status"] == "clipped").astype(int),
+        "B Blocked": (records_b_df["safety_status"] == "blocked").astype(int),
+        "B Clipped": (records_b_df["safety_status"] == "clipped").astype(int),
+    }).set_index("time")
+
+    st.bar_chart(safety_overlay_df)
+
+    st.markdown("### AI Comparative Verdict")
+
+    verdict_lines = []
+
+    # Time in range comparison
+    if summary_a.percent_time_in_range > summary_b.percent_time_in_range:
+        verdict_lines.append("Scenario A maintains better glucose control (higher time in range).")
+    elif summary_b.percent_time_in_range > summary_a.percent_time_in_range:
+        verdict_lines.append("Scenario B maintains better glucose control (higher time in range).")
+
+    # Peak glucose comparison
+    if summary_b.peak_cgm_glucose_mgdl > summary_a.peak_cgm_glucose_mgdl:
+        verdict_lines.append("Scenario B experiences higher glucose spikes, indicating greater metabolic stress.")
+
+    # Safety intervention comparison
+    if summary_b.blocked_decisions + summary_b.clipped_decisions > summary_a.blocked_decisions + summary_a.clipped_decisions:
+        verdict_lines.append("Scenario B triggers more safety interventions, suggesting constraint pressure on dosing.")
+    elif summary_a.blocked_decisions + summary_a.clipped_decisions > summary_b.blocked_decisions + summary_b.clipped_decisions:
+        verdict_lines.append("Scenario A triggers more safety interventions.")
+
+    # Insulin comparison
+    if summary_b.total_insulin_delivered_u > summary_a.total_insulin_delivered_u:
+        verdict_lines.append("Scenario B requires significantly more insulin delivery.")
+
+    if not verdict_lines:
+        verdict_lines.append("Both scenarios behave similarly under current constraints.")
+
+    for line in verdict_lines:
+        st.write(f"- {line}")
+
+
 
 else:
-    st.info("Choose settings in the sidebar, then click 'Run Evaluation'.")
+    st.info("Choose Scenario A and Scenario B in the sidebar, then click 'Run Comparison'.")
