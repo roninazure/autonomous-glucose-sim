@@ -520,24 +520,24 @@ if run_button:
     # ── Charts ────────────────────────────────────────────────────────────
     st.plotly_chart(
         cgm_chart(df_a, df_b, scenario_a_name, scenario_b_name),
-        use_container_width=True,
+        width="stretch",
     )
 
     c1, c2 = st.columns([3, 2])
     with c1:
         st.plotly_chart(
             insulin_chart(df_a, df_b, scenario_a_name, scenario_b_name),
-            use_container_width=True,
+            width="stretch",
         )
     with c2:
         st.plotly_chart(
             iob_chart(df_a, df_b, scenario_a_name, scenario_b_name),
-            use_container_width=True,
+            width="stretch",
         )
 
     st.plotly_chart(
         safety_chart(df_a, df_b, scenario_a_name, scenario_b_name),
-        use_container_width=True,
+        width="stretch",
     )
 
     # ── Metrics table ─────────────────────────────────────────────────────
@@ -580,7 +580,7 @@ if run_button:
                 summary_b.allowed_decisions,
             ],
         })
-        st.dataframe(compare_df, use_container_width=True, hide_index=True)
+        st.dataframe(compare_df, width="stretch", hide_index=True)
 
     # ── AI Verdict ────────────────────────────────────────────────────────
     verdict_lines: list[str] = []
