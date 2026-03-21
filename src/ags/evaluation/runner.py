@@ -10,6 +10,9 @@ from ags.safety.state import SafetyThresholds
 from ags.simulation.engine import run_simulation
 from ags.simulation.state import SimulationInputs
 
+# Must match the decay factor used in src/ags/simulation/insulin.py
+_IOB_DECAY_FACTOR = 0.95
+
 
 def run_evaluation(
     simulation_inputs: SimulationInputs,
@@ -31,11 +34,17 @@ def run_evaluation(
 
     records: list[TimestepRecord] = []
 
+    # Track IOB independently so that each delivered dose feeds back into the
+    # next timestep's controller and safety decisions. Previously, the loop
+    # read IOB from the simulation snapshot, which never incorporated delivered
+    # insulin, making the safety IOB guard ineffective.
+    tracked_iob_u = snapshots[0].insulin_on_board_u
+
     for previous, current in zip(snapshots[:-1], snapshots[1:]):
         controller_inputs = ControllerInputs(
             current_glucose_mgdl=current.cgm_glucose_mgdl,
             previous_glucose_mgdl=previous.cgm_glucose_mgdl,
-            insulin_on_board_u=current.insulin_on_board_u,
+            insulin_on_board_u=tracked_iob_u,
             target_glucose_mgdl=110.0,
             correction_factor_mgdl_per_unit=50.0,
         )
@@ -49,6 +58,9 @@ def run_evaluation(
             safety_decision=safety_decision,
             pump_config=pump_config,
         )
+
+        # Decay existing IOB then add what was just delivered.
+        tracked_iob_u = tracked_iob_u * _IOB_DECAY_FACTOR + pump_result.delivered_units
 
         records.append(
             TimestepRecord(
