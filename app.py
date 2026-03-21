@@ -19,6 +19,8 @@ from ags.evaluation.profiles import ALL_PROFILES
 from ags.evaluation.report import generate_report
 from ags.evaluation.runner import run_evaluation
 from ags.pump.state import PumpConfig
+from ags.explainability.annotator import annotate_run
+from ags.explainability.state import GATE_COLOURS, GATE_LABELS
 from ags.retrospective.loader import CgmParseError, parse_cgm_text, readings_to_csv
 from ags.retrospective.reference_traces import REFERENCE_TRACE_DESCRIPTIONS, REFERENCE_TRACES
 from ags.retrospective.runner import RetrospectiveConfig, run_retrospective
@@ -361,6 +363,108 @@ SCENARIO_DESCRIPTIONS = {
     "Missed Bolus":         "75g meal · no pre-bolus · tests retroactive correction recovery",
     "Late Correction":      "60g meal + snack · delayed insulin · timing mismatch risk",
 }
+
+
+# ── Decision Timeline panel ───────────────────────────────────────────────────
+
+def decision_timeline_panel(
+    explanations: list,
+    key_suffix: str = "",
+) -> None:
+    """Render an expandable per-step decision timeline table + drill-down card.
+
+    Shows a colour-coded row per timestep (gate colour), a trend sparkline in
+    the table, and a detailed monospace card for the user-selected step.
+    """
+    if not explanations:
+        return
+
+    with st.expander("▶  DECISION TIMELINE", expanded=False):
+        # ── Build display DataFrame ─────────────────────────────────────
+        rows = []
+        gate_ids = []
+        for exp in explanations:
+            rows.append({
+                "t (min)": exp.timestamp_min,
+                "CGM": f"{exp.cgm_mgdl:.0f}",
+                "trend": f"{exp.trend_arrow} {exp.trend_rate_mgdl_per_min:+.1f}/min",
+                "pred +30": f"{exp.predicted_glucose_mgdl:.0f}",
+                "IOB (U)": f"{exp.iob_u:.2f}",
+                "rec'd (U)": f"{exp.recommended_units:.3f}",
+                "gate": GATE_LABELS.get(exp.safety_gate, exp.safety_gate),
+                "delivered (U)": f"{exp.delivered_units:.3f}",
+                "narrative": exp.narrative,
+            })
+            gate_ids.append(exp.safety_gate)
+
+        import pandas as _pd
+        _tl_df = _pd.DataFrame(rows)
+        _gate_id_series = gate_ids  # parallel list for styling
+
+        def _style_gate(row):
+            gate_id = _gate_id_series[row.name]
+            fg = GATE_COLOURS.get(gate_id, "#888888")
+            bg = f"{fg}22"
+            result = [""] * len(row)
+            try:
+                gate_idx = list(_tl_df.columns).index("gate")
+                result[gate_idx] = f"background-color:{bg}; color:{fg}; font-weight:700;"
+            except ValueError:
+                pass
+            return result
+
+        _styled = _tl_df.style.apply(_style_gate, axis=1)
+        st.dataframe(_styled, use_container_width=True, hide_index=True)
+
+        # ── Step drill-down ─────────────────────────────────────────────
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.55rem;
+                    color:{MUTED}; letter-spacing:3px; text-transform:uppercase;
+                    margin:1rem 0 0.4rem 0;">── STEP DRILL-DOWN</div>
+        """, unsafe_allow_html=True)
+
+        _ts_options = [f"t = {e.timestamp_min} min" for e in explanations]
+        _selected_label = st.selectbox(
+            "Select timestep",
+            _ts_options,
+            key=f"timeline_step_{key_suffix}",
+            label_visibility="collapsed",
+        )
+        _sel_idx = _ts_options.index(_selected_label)
+        _e = explanations[_sel_idx]
+
+        _gate_fg = GATE_COLOURS.get(_e.safety_gate, "#888888")
+        _gate_lbl = GATE_LABELS.get(_e.safety_gate, _e.safety_gate)
+        _susp_line = (
+            f"  suspension    : step {_e.suspension_step}\n"
+            if _e.is_suspended else ""
+        )
+
+        st.markdown(f"""
+<div style="background:{BG2}; border:1px solid {NEON_DIM}; border-left:3px solid {_gate_fg};
+            border-radius:3px; padding:1rem 1.25rem; margin-top:0.25rem;
+            font-family:'Share Tech Mono',monospace; font-size:0.72rem;
+            color:{WHITE}; line-height:1.9; white-space:pre;">
+<span style="color:{NEON_DIM}">┌─ t = {_e.timestamp_min} min ──────────────────────────────────────</span>
+<span style="color:{CYAN}">  cgm            : {_e.cgm_mgdl:.1f} mg/dL</span>
+<span style="color:{WHITE}">  trend           : {_e.trend_arrow}  {_e.trend_rate_mgdl_per_min:+.2f} mg/dL/min</span>
+<span style="color:{WHITE}">  predicted +{_e.prediction_horizon_min}   : {_e.predicted_glucose_mgdl:.1f} mg/dL</span>
+<span style="color:{WHITE}">  IOB             : {_e.iob_u:.3f} U</span>
+<span style="color:{NEON_DIM}">├─ controller ──────────────────────────────────────────────────</span>
+<span style="color:{WHITE}">  recommended     : {_e.recommended_units:.3f} U</span>
+<span style="color:{MUTED}">  reason          : {_e.controller_reason}</span>
+<span style="color:{NEON_DIM}">├─ safety ───────────────────────────────────────────────────────</span>
+<span style="color:{_gate_fg}">  gate            : {_gate_lbl}</span>
+<span style="color:{MUTED}">  reason          : {_e.safety_reason}</span>
+<span style="color:{WHITE}">  status          : {_e.safety_status}</span>
+<span style="color:{WHITE}">  final units     : {_e.safety_final_units:.3f} U</span>{_susp_line}
+<span style="color:{NEON_DIM}">├─ delivery ─────────────────────────────────────────────────────</span>
+<span style="color:{NEON}">  delivered       : {_e.delivered_units:.3f} U</span>
+<span style="color:{NEON_DIM}">├─ narrative ────────────────────────────────────────────────────</span>
+<span style="color:{WHITE}">  {_e.narrative}</span>
+<span style="color:{NEON_DIM}">└──────────────────────────────────────────────────────────────</span>
+</div>
+        """, unsafe_allow_html=True)
 
 
 # ── Scenario builder ─────────────────────────────────────────────────────────
@@ -728,6 +832,20 @@ if run_button:
                 file_name=f"cgm_trace_{_trace_label.lower()[:30].replace(' ', '_')}.csv",
                 mime="text/csv",
             )
+
+        # ── Decision Timeline ──────────────────────────────────────────────
+        retro_exps = annotate_run(
+            retro_records,
+            seed_glucose_mgdl=retro_readings[0].glucose_mgdl,
+            target_glucose_mgdl=retro_cfg.target_glucose_mgdl,
+            correction_factor_mgdl_per_unit=retro_cfg.correction_factor_mgdl_per_unit,
+            min_excursion_delta_mgdl=retro_cfg.min_excursion_delta_mgdl,
+            microbolus_fraction=retro_cfg.microbolus_fraction,
+            safety_thresholds=safety_thresholds,
+            step_minutes=int(_step_min),
+        )
+        decision_timeline_panel(retro_exps, key_suffix="retro")
+
         st.stop()
 
     elif dashboard_mode == "Profile Sweep":
@@ -1157,6 +1275,44 @@ if run_button:
             file_name=f"swarm_report_B_{scenario_b_name.lower().replace(' ', '_')}.json",
             mime="application/json",
         )
+
+    # ── Decision Timelines (Scenario A then B) ────────────────────────────
+    _cfg_a = build_scenario(scenario_a_name)
+    _cfg_b = build_scenario(scenario_b_name)
+    _exps_a = annotate_run(
+        records_a,
+        seed_glucose_mgdl=140.0,
+        target_glucose_mgdl=110.0,
+        correction_factor_mgdl_per_unit=_cfg_a.insulin_sensitivity_mgdl_per_unit,
+        min_excursion_delta_mgdl=min_excursion_delta,
+        microbolus_fraction=microbolus_fraction,
+        safety_thresholds=safety_thresholds,
+        step_minutes=step_minutes,
+    )
+    _exps_b = annotate_run(
+        records_b,
+        seed_glucose_mgdl=140.0,
+        target_glucose_mgdl=110.0,
+        correction_factor_mgdl_per_unit=_cfg_b.insulin_sensitivity_mgdl_per_unit,
+        min_excursion_delta_mgdl=min_excursion_delta,
+        microbolus_fraction=microbolus_fraction,
+        safety_thresholds=safety_thresholds,
+        step_minutes=step_minutes,
+    )
+    st.markdown(f"""
+    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                letter-spacing:4px; text-transform:uppercase; margin:1.5rem 0 0.25rem 0;">
+      ── SCENARIO A · DECISION TIMELINE
+    </div>
+    """, unsafe_allow_html=True)
+    decision_timeline_panel(_exps_a, key_suffix="comp_a")
+    st.markdown(f"""
+    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                letter-spacing:4px; text-transform:uppercase; margin:0.75rem 0 0.25rem 0;">
+      ── SCENARIO B · DECISION TIMELINE
+    </div>
+    """, unsafe_allow_html=True)
+    decision_timeline_panel(_exps_b, key_suffix="comp_b")
 
     st.markdown(f"""
     <div style="margin-top:1rem;">
