@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -17,11 +18,329 @@ from ags.safety.state import SafetyThresholds
 from ags.simulation.scenarios import baseline_meal_scenario
 from ags.simulation.state import MealEvent, SimulationInputs
 
+# ── Palette ─────────────────────────────────────────────────────────────────
+BG       = "#050a06"
+BG2      = "#0b140c"
+BG3      = "#0f1a10"
+NEON     = "#39ff14"
+NEON_DIM = "#1a6b09"
+RED      = "#ff4d6d"
+AMBER    = "#ffbe0b"
+CYAN     = "#00f5ff"
+WHITE    = "#d4ecd4"
+MUTED    = "#3d6b3d"
+GRID     = "#0d200d"
 
+# ── Page config (must be first Streamlit call) ───────────────────────────────
+st.set_page_config(
+    page_title="SWARM Bolus",
+    page_icon="⬡",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── Global CSS ───────────────────────────────────────────────────────────────
+st.markdown(f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+html, body, [class*="css"] {{
+    background-color: {BG} !important;
+    color: {WHITE} !important;
+    font-family: 'Share Tech Mono', monospace !important;
+}}
+
+/* Sidebar */
+[data-testid="stSidebar"] {{
+    background-color: {BG2} !important;
+    border-right: 1px solid {NEON_DIM} !important;
+}}
+[data-testid="stSidebar"] * {{
+    font-family: 'Share Tech Mono', monospace !important;
+}}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {{
+    color: {NEON} !important;
+    font-size: 0.65rem !important;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding-bottom: 6px;
+    border-bottom: 1px solid {NEON_DIM};
+    margin-top: 1.5rem !important;
+}}
+
+/* Primary button */
+[data-testid="stButton"] > button[kind="primary"] {{
+    background: transparent !important;
+    border: 1px solid {NEON} !important;
+    color: {NEON} !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.8rem !important;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    width: 100%;
+    padding: 0.65rem !important;
+    box-shadow: 0 0 12px {NEON_DIM};
+    transition: all 0.15s ease;
+}}
+[data-testid="stButton"] > button[kind="primary"]:hover {{
+    background: {NEON} !important;
+    color: {BG} !important;
+    box-shadow: 0 0 24px {NEON};
+}}
+
+/* Metrics */
+[data-testid="metric-container"] {{
+    background-color: {BG2} !important;
+    border: 1px solid {NEON_DIM} !important;
+    border-radius: 3px !important;
+    padding: 10px 14px !important;
+}}
+[data-testid="stMetricValue"] {{
+    color: {NEON} !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 1.3rem !important;
+    text-shadow: 0 0 8px {NEON_DIM};
+}}
+[data-testid="stMetricLabel"] {{
+    color: {MUTED} !important;
+    font-size: 0.6rem !important;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}}
+
+/* Dataframe */
+[data-testid="stDataFrame"] {{
+    border: 1px solid {NEON_DIM} !important;
+}}
+[data-testid="stDataFrame"] th {{
+    background-color: {BG3} !important;
+    color: {NEON} !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}}
+[data-testid="stDataFrame"] td {{
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.8rem !important;
+    color: {WHITE} !important;
+}}
+
+/* Plotly containers */
+[data-testid="stPlotlyChart"] {{
+    border: 1px solid {NEON_DIM};
+    border-radius: 3px;
+    overflow: hidden;
+}}
+
+/* Info box */
+[data-testid="stAlert"] {{
+    background-color: {BG2} !important;
+    border: 1px solid {NEON_DIM} !important;
+    color: {WHITE} !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.8rem !important;
+}}
+
+/* Scrollbar */
+::-webkit-scrollbar {{ width: 5px; height: 5px; }}
+::-webkit-scrollbar-track {{ background: {BG}; }}
+::-webkit-scrollbar-thumb {{ background: {NEON_DIM}; border-radius: 2px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {NEON}; }}
+
+/* Divider */
+hr {{ border-color: {NEON_DIM} !important; opacity: 0.5; }}
+
+/* Section labels */
+.section-label {{
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    color: {MUTED};
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ── Helper: shared Plotly layout ────────────────────────────────────────────
+def _layout(title: str = "", height: int = 320) -> dict:
+    return dict(
+        title=dict(
+            text=title,
+            font=dict(family="Share Tech Mono", size=11, color=NEON),
+            x=0,
+            pad=dict(l=0, t=4),
+        ),
+        height=height,
+        margin=dict(l=55, r=20, t=44, b=44),
+        plot_bgcolor=BG,
+        paper_bgcolor=BG2,
+        font=dict(family="Share Tech Mono", color=WHITE, size=10),
+        xaxis=dict(
+            gridcolor=GRID,
+            linecolor=NEON_DIM,
+            tickcolor=NEON_DIM,
+            tickfont=dict(color=MUTED, size=9),
+            title_font=dict(color=MUTED, size=9),
+            zeroline=False,
+        ),
+        yaxis=dict(
+            gridcolor=GRID,
+            linecolor=NEON_DIM,
+            tickcolor=NEON_DIM,
+            tickfont=dict(color=MUTED, size=9),
+            title_font=dict(color=MUTED, size=9),
+            zeroline=False,
+        ),
+        legend=dict(
+            bgcolor=BG,
+            bordercolor=NEON_DIM,
+            borderwidth=1,
+            font=dict(family="Share Tech Mono", size=9, color=WHITE),
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0,
+        ),
+        hovermode="x unified",
+    )
+
+
+# ── Chart builders ───────────────────────────────────────────────────────────
+def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) -> go.Figure:
+    fig = go.Figure()
+
+    # In-range band
+    fig.add_hrect(
+        y0=70, y1=180,
+        fillcolor="rgba(57,255,20,0.04)", line_width=0,
+    )
+    # Threshold lines
+    fig.add_hline(y=70, line=dict(color=RED, width=1, dash="dot"),
+                  annotation=dict(text="HYPO 70", font=dict(color=RED, size=8), xanchor="left"))
+    fig.add_hline(y=180, line=dict(color=AMBER, width=1, dash="dot"),
+                  annotation=dict(text="HYPER 180", font=dict(color=AMBER, size=8), xanchor="left"))
+    fig.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
+                  annotation=dict(text="SEVERE 250", font=dict(color=RED, size=8), xanchor="left"))
+
+    fig.add_trace(go.Scatter(
+        x=df_a["timestamp_min"], y=df_a["cgm_glucose_mgdl"],
+        mode="lines", name=f"A · {name_a}",
+        line=dict(color=NEON, width=2),
+        hovertemplate="%{y:.1f} mg/dL<extra>A</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_b["timestamp_min"], y=df_b["cgm_glucose_mgdl"],
+        mode="lines", name=f"B · {name_b}",
+        line=dict(color=CYAN, width=2, dash="dash"),
+        hovertemplate="%{y:.1f} mg/dL<extra>B</extra>",
+    ))
+
+    layout = _layout("CGM TRAJECTORY", height=360)
+    layout["yaxis"]["title"] = "mg/dL"
+    layout["xaxis"]["title"] = "minutes"
+    fig.update_layout(**layout)
+    return fig
+
+
+def insulin_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) -> go.Figure:
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        x=df_a["timestamp_min"], y=df_a["pump_delivered_units"],
+        name="A Delivered", marker_color=NEON, opacity=0.85,
+        hovertemplate="%{y:.3f} U<extra>A Delivered</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_a["timestamp_min"], y=df_a["recommended_units"],
+        mode="lines", name="A Recommended",
+        line=dict(color=NEON_DIM, width=1.5, dash="dot"),
+        hovertemplate="%{y:.3f} U<extra>A Recommended</extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=df_b["timestamp_min"], y=df_b["pump_delivered_units"],
+        name="B Delivered", marker_color=CYAN, opacity=0.5,
+        hovertemplate="%{y:.3f} U<extra>B Delivered</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_b["timestamp_min"], y=df_b["recommended_units"],
+        mode="lines", name="B Recommended",
+        line=dict(color="#005a6b", width=1.5, dash="dot"),
+        hovertemplate="%{y:.3f} U<extra>B Recommended</extra>",
+    ))
+
+    layout = _layout("INSULIN DELIVERY", height=280)
+    layout["yaxis"]["title"] = "units"
+    layout["xaxis"]["title"] = "minutes"
+    layout["barmode"] = "overlay"
+    fig.update_layout(**layout)
+    return fig
+
+
+def iob_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) -> go.Figure:
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=df_a["timestamp_min"], y=df_a["insulin_on_board_u"],
+        mode="lines", name=f"A · {name_a}",
+        line=dict(color=NEON, width=2),
+        fill="tozeroy", fillcolor="rgba(57,255,20,0.07)",
+        hovertemplate="%{y:.3f} U<extra>A IOB</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_b["timestamp_min"], y=df_b["insulin_on_board_u"],
+        mode="lines", name=f"B · {name_b}",
+        line=dict(color=CYAN, width=2, dash="dash"),
+        fill="tozeroy", fillcolor="rgba(0,245,255,0.05)",
+        hovertemplate="%{y:.3f} U<extra>B IOB</extra>",
+    ))
+
+    layout = _layout("INSULIN ON BOARD", height=240)
+    layout["yaxis"]["title"] = "IOB (U)"
+    layout["xaxis"]["title"] = "minutes"
+    fig.update_layout(**layout)
+    return fig
+
+
+def safety_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) -> go.Figure:
+    fig = go.Figure()
+
+    for df, label, col in [(df_a, "A", NEON), (df_b, "B", CYAN)]:
+        blocked = df[df["safety_status"] == "blocked"]
+        clipped = df[df["safety_status"] == "clipped"]
+        if not blocked.empty:
+            fig.add_trace(go.Scatter(
+                x=blocked["timestamp_min"], y=[label] * len(blocked),
+                mode="markers", name=f"{label} Blocked",
+                marker=dict(symbol="x", size=12, color=RED, line=dict(width=2, color=RED)),
+                hovertemplate="t=%{x} min — BLOCKED<extra>" + label + "</extra>",
+            ))
+        if not clipped.empty:
+            fig.add_trace(go.Scatter(
+                x=clipped["timestamp_min"], y=[label] * len(clipped),
+                mode="markers", name=f"{label} Clipped",
+                marker=dict(symbol="triangle-up", size=11, color=AMBER, line=dict(width=1, color=AMBER)),
+                hovertemplate="t=%{x} min — CLIPPED<extra>" + label + "</extra>",
+            ))
+
+    layout = _layout("SAFETY INTERVENTIONS", height=200)
+    layout["xaxis"]["title"] = "minutes"
+    layout["yaxis"]["categoryorder"] = "array"
+    layout["yaxis"]["categoryarray"] = ["B", "A"]
+    layout["margin"]["l"] = 40
+    fig.update_layout(**layout)
+    return fig
+
+
+# ── Scenario builder ─────────────────────────────────────────────────────────
 def build_scenario(name: str) -> SimulationInputs:
     if name == "Baseline Meal":
         return baseline_meal_scenario()
-
     if name == "Fasting Baseline":
         return SimulationInputs(
             insulin_sensitivity_mgdl_per_unit=50.0,
@@ -29,7 +348,6 @@ def build_scenario(name: str) -> SimulationInputs:
             baseline_drift_mgdl_per_step=0.0,
             meal_events=[],
         )
-
     if name == "Large Meal Spike":
         return SimulationInputs(
             insulin_sensitivity_mgdl_per_unit=50.0,
@@ -39,124 +357,76 @@ def build_scenario(name: str) -> SimulationInputs:
                 MealEvent(timestamp_min=30, carbs_g=90.0, absorption_minutes=150),
             ],
         )
-
     return baseline_meal_scenario()
 
 
-st.set_page_config(
-    page_title="SWARM Bolus",
-    page_icon="🧪",
-    layout="wide",
-)
+# ── Header ───────────────────────────────────────────────────────────────────
+st.markdown(f"""
+<div style="padding:2rem 0 1.5rem 0; border-bottom:1px solid {NEON_DIM}; margin-bottom:2rem;">
+  <div style="font-family:'Orbitron',monospace; font-size:2.2rem; font-weight:900;
+              color:{NEON}; letter-spacing:10px; text-transform:uppercase;
+              text-shadow:0 0 20px {NEON}, 0 0 60px {NEON_DIM}; line-height:1;">
+    ⬡ SWARM BOLUS
+  </div>
+  <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem;
+              color:{MUTED}; letter-spacing:5px; margin-top:0.5rem; text-transform:uppercase;">
+    Autonomous Glucose Simulation · 2-Compartment PK/PD · Gamma Gut Model
+  </div>
+  <div style="margin-top:1rem; display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+    <span style="background:{BG2}; border:1px solid {RED}; color:{RED};
+                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
+                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
+      ⚠ SIMULATION ONLY — NOT CLINICAL SOFTWARE
+    </span>
+    <span style="background:{BG2}; border:1px solid {NEON_DIM}; color:{NEON};
+                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
+                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
+      ◉ IOB FEEDBACK ACTIVE
+    </span>
+    <span style="background:{BG2}; border:1px solid {NEON_DIM}; color:{NEON};
+                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
+                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
+      ◉ SAFETY LAYER ENABLED
+    </span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-st.markdown(
-    """
-    <style>
-    ::-webkit-scrollbar {
-        width: 16px;
-        height: 16px;
-    }
-    ::-webkit-scrollbar-thumb {
-        background: #888;
-        border-radius: 8px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-        background: #666;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.title("SWARM Bolus")
-st.subheader("Autonomous Glucose Simulation Dashboard")
-st.caption("AI-driven insulin decision engine with safety constraints and explainability")
-st.markdown("---")
-
-scenario_options = [
-    "Baseline Meal",
-    "Fasting Baseline",
-    "Large Meal Spike",
-]
+# ── Sidebar ──────────────────────────────────────────────────────────────────
+SCENARIO_OPTIONS = ["Baseline Meal", "Fasting Baseline", "Large Meal Spike"]
 
 with st.sidebar:
-    st.header("Simulation Controls")
+    st.markdown(f"""
+    <div style="font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700;
+                color:{NEON}; letter-spacing:4px; text-transform:uppercase;
+                text-shadow:0 0 10px {NEON_DIM}; padding:0.5rem 0 1rem 0;
+                border-bottom:1px solid {NEON_DIM};">
+      ⬡ CONTROLS
+    </div>
+    """, unsafe_allow_html=True)
 
-    scenario_a_name = st.selectbox(
-        "Scenario A",
-        options=scenario_options,
-        index=0,
-    )
+    st.header("Scenarios")
+    scenario_a_name = st.selectbox("Scenario A", options=SCENARIO_OPTIONS, index=0)
+    scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
 
-    scenario_b_name = st.selectbox(
-        "Scenario B",
-        options=scenario_options,
-        index=2,
-    )
+    st.header("Simulation")
+    duration_minutes = st.slider("Duration (minutes)", 30, 360, 180, 30)
+    step_minutes = st.selectbox("Timestep (minutes)", [5, 10, 15], index=0)
 
-    duration_minutes = st.slider(
-        "Duration (minutes)",
-        min_value=30,
-        max_value=360,
-        value=180,
-        step=30,
-    )
+    st.header("Safety Layer")
+    max_units_per_interval = st.slider("Max units per interval", 0.1, 3.0, 1.0, 0.05)
+    max_insulin_on_board_u = st.slider("Max insulin on board (U)", 0.5, 10.0, 3.0, 0.1)
+    min_predicted_glucose_mgdl = st.slider("Min predicted glucose (mg/dL)", 60, 120, 80, 1)
+    require_confirmed_trend = st.checkbox("Require confirmed rising trend", value=True)
 
-    step_minutes = st.selectbox(
-        "Timestep (minutes)",
-        options=[5, 10, 15],
-        index=0,
-    )
+    st.header("Pump")
+    dose_increment_u = st.selectbox("Dose increment (U)", [0.05, 0.1], index=0)
+    pump_max_units_per_interval = st.slider("Pump max units per interval", 0.1, 3.0, 1.0, 0.05)
 
-    st.header("Safety Settings")
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+    run_button = st.button("▶  RUN COMPARISON", type="primary")
 
-    max_units_per_interval = st.slider(
-        "Max units per interval",
-        min_value=0.1,
-        max_value=3.0,
-        value=1.0,
-        step=0.05,
-    )
-
-    max_insulin_on_board_u = st.slider(
-        "Max insulin on board (U)",
-        min_value=0.5,
-        max_value=10.0,
-        value=3.0,
-        step=0.1,
-    )
-
-    min_predicted_glucose_mgdl = st.slider(
-        "Min predicted glucose (mg/dL)",
-        min_value=60,
-        max_value=120,
-        value=80,
-        step=1,
-    )
-
-    require_confirmed_trend = st.checkbox(
-        "Require confirmed rising trend",
-        value=True,
-    )
-
-    st.header("Pump Settings")
-
-    dose_increment_u = st.selectbox(
-        "Dose increment (U)",
-        options=[0.05, 0.1],
-        index=0,
-    )
-
-    pump_max_units_per_interval = st.slider(
-        "Pump max units per interval",
-        min_value=0.1,
-        max_value=3.0,
-        value=1.0,
-        step=0.05,
-    )
-
-    run_button = st.button("Run Comparison", type="primary")
-
+# ── Results ──────────────────────────────────────────────────────────────────
 if run_button:
     safety_thresholds = SafetyThresholds(
         max_units_per_interval=max_units_per_interval,
@@ -164,76 +434,123 @@ if run_button:
         min_predicted_glucose_mgdl=float(min_predicted_glucose_mgdl),
         require_confirmed_trend=require_confirmed_trend,
     )
-
     pump_config = PumpConfig(
         dose_increment_u=dose_increment_u,
         max_units_per_interval=pump_max_units_per_interval,
     )
 
-    records_a, summary_a = run_evaluation(
-        simulation_inputs=build_scenario(scenario_a_name),
-        safety_thresholds=safety_thresholds,
-        pump_config=pump_config,
-        duration_minutes=duration_minutes,
-        step_minutes=step_minutes,
-        seed=42,
+    with st.spinner(""):
+        records_a, summary_a = run_evaluation(
+            simulation_inputs=build_scenario(scenario_a_name),
+            safety_thresholds=safety_thresholds,
+            pump_config=pump_config,
+            duration_minutes=duration_minutes,
+            step_minutes=step_minutes,
+            seed=42,
+        )
+        records_b, summary_b = run_evaluation(
+            simulation_inputs=build_scenario(scenario_b_name),
+            safety_thresholds=safety_thresholds,
+            pump_config=pump_config,
+            duration_minutes=duration_minutes,
+            step_minutes=step_minutes,
+            seed=42,
+        )
+
+    df_a = pd.DataFrame([r.__dict__ for r in records_a])
+    df_b = pd.DataFrame([r.__dict__ for r in records_b])
+
+    # ── Scenario metric panels ────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                letter-spacing:4px; text-transform:uppercase; margin-bottom:0.75rem;">
+      ── SCENARIO COMPARISON
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_a, col_b = st.columns(2)
+
+    def tir_color(pct: float) -> str:
+        if pct >= 70:
+            return NEON
+        if pct >= 50:
+            return AMBER
+        return RED
+
+    with col_a:
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+                    color:{NEON}; letter-spacing:3px; text-transform:uppercase;
+                    margin-bottom:0.5rem; border-left:3px solid {NEON}; padding-left:0.75rem;">
+          SCENARIO A · {scenario_a_name.upper()}
+        </div>
+        """, unsafe_allow_html=True)
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Time in Range", f"{summary_a.percent_time_in_range:.1f}%")
+        r2.metric("Avg CGM", f"{summary_a.average_cgm_glucose_mgdl:.0f}")
+        r3.metric("Peak CGM", f"{summary_a.peak_cgm_glucose_mgdl:.0f}")
+        r4.metric("Above 250", f"{summary_a.time_above_250_steps} steps")
+        r5, r6, r7, r8 = st.columns(4)
+        r5.metric("Recommended U", f"{summary_a.total_recommended_insulin_u:.2f}")
+        r6.metric("Delivered U", f"{summary_a.total_insulin_delivered_u:.2f}")
+        r7.metric("Blocked", summary_a.blocked_decisions)
+        r8.metric("Clipped", summary_a.clipped_decisions)
+
+    with col_b:
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+                    color:{CYAN}; letter-spacing:3px; text-transform:uppercase;
+                    margin-bottom:0.5rem; border-left:3px solid {CYAN}; padding-left:0.75rem;">
+          SCENARIO B · {scenario_b_name.upper()}
+        </div>
+        """, unsafe_allow_html=True)
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Time in Range", f"{summary_b.percent_time_in_range:.1f}%")
+        r2.metric("Avg CGM", f"{summary_b.average_cgm_glucose_mgdl:.0f}")
+        r3.metric("Peak CGM", f"{summary_b.peak_cgm_glucose_mgdl:.0f}")
+        r4.metric("Above 250", f"{summary_b.time_above_250_steps} steps")
+        r5, r6, r7, r8 = st.columns(4)
+        r5.metric("Recommended U", f"{summary_b.total_recommended_insulin_u:.2f}")
+        r6.metric("Delivered U", f"{summary_b.total_insulin_delivered_u:.2f}")
+        r7.metric("Blocked", summary_b.blocked_decisions)
+        r8.metric("Clipped", summary_b.clipped_decisions)
+
+    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+    # ── Charts ────────────────────────────────────────────────────────────
+    st.plotly_chart(
+        cgm_chart(df_a, df_b, scenario_a_name, scenario_b_name),
+        use_container_width=True,
     )
 
-    records_b, summary_b = run_evaluation(
-        simulation_inputs=build_scenario(scenario_b_name),
-        safety_thresholds=safety_thresholds,
-        pump_config=pump_config,
-        duration_minutes=duration_minutes,
-        step_minutes=step_minutes,
-        seed=42,
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        st.plotly_chart(
+            insulin_chart(df_a, df_b, scenario_a_name, scenario_b_name),
+            use_container_width=True,
+        )
+    with c2:
+        st.plotly_chart(
+            iob_chart(df_a, df_b, scenario_a_name, scenario_b_name),
+            use_container_width=True,
+        )
+
+    st.plotly_chart(
+        safety_chart(df_a, df_b, scenario_a_name, scenario_b_name),
+        use_container_width=True,
     )
 
-    records_a_df = pd.DataFrame([r.__dict__ for r in records_a])
-    records_b_df = pd.DataFrame([r.__dict__ for r in records_b])
-
-    st.markdown("## Scenario Comparison")
-
-    left, right = st.columns(2)
-
-    with left:
-        st.markdown(f"### Scenario A: {scenario_a_name}")
-        a1, a2, a3, a4 = st.columns(4)
-        a1.metric("Steps", summary_a.total_timesteps)
-        a2.metric("Time in Range %", f"{summary_a.percent_time_in_range:.2f}%")
-        a3.metric("Avg CGM", f"{summary_a.average_cgm_glucose_mgdl:.2f}")
-        a4.metric("Peak CGM", f"{summary_a.peak_cgm_glucose_mgdl:.2f}")
-
-        a5, a6, a7, a8 = st.columns(4)
-        a5.metric("Recommended U", f"{summary_a.total_recommended_insulin_u:.2f}")
-        a6.metric("Delivered U", f"{summary_a.total_insulin_delivered_u:.2f}")
-        a7.metric("Blocked", summary_a.blocked_decisions)
-        a8.metric("Clipped", summary_a.clipped_decisions)
-
-    with right:
-        st.markdown(f"### Scenario B: {scenario_b_name}")
-        b1, b2, b3, b4 = st.columns(4)
-        b1.metric("Steps", summary_b.total_timesteps)
-        b2.metric("Time in Range %", f"{summary_b.percent_time_in_range:.2f}%")
-        b3.metric("Avg CGM", f"{summary_b.average_cgm_glucose_mgdl:.2f}")
-        b4.metric("Peak CGM", f"{summary_b.peak_cgm_glucose_mgdl:.2f}")
-
-        b5, b6, b7, b8 = st.columns(4)
-        b5.metric("Recommended U", f"{summary_b.total_recommended_insulin_u:.2f}")
-        b6.metric("Delivered U", f"{summary_b.total_insulin_delivered_u:.2f}")
-        b7.metric("Blocked", summary_b.blocked_decisions)
-        b8.metric("Clipped", summary_b.clipped_decisions)
-
-    st.markdown("### Comparison Snapshot")
-    compare_df = pd.DataFrame(
-        {
+    # ── Metrics table ─────────────────────────────────────────────────────
+    with st.expander("CLINICAL METRICS TABLE", expanded=False):
+        compare_df = pd.DataFrame({
             "Metric": [
                 "Time in Range %",
-                "Average CGM",
-                "Peak CGM",
-                "Time Above 250",
-                "Glucose Variability (SD)",
-                "Recommended Insulin",
-                "Delivered Insulin",
+                "Average CGM (mg/dL)",
+                "Peak CGM (mg/dL)",
+                "Time Above 250 (steps)",
+                "Glucose Variability SD",
+                "Recommended Insulin (U)",
+                "Delivered Insulin (U)",
                 "Blocked Decisions",
                 "Clipped Decisions",
                 "Allowed Decisions",
@@ -262,75 +579,101 @@ if run_button:
                 summary_b.clipped_decisions,
                 summary_b.allowed_decisions,
             ],
-        }
-    )
-    st.dataframe(compare_df, use_container_width=True)
+        })
+        st.dataframe(compare_df, use_container_width=True, hide_index=True)
 
-    st.markdown("### CGM Trajectory Comparison")
-    cgm_compare_df = pd.DataFrame(
-        {
-            "time": records_a_df["timestamp_min"],
-            "Scenario A CGM": records_a_df["cgm_glucose_mgdl"],
-            "Scenario B CGM": records_b_df["cgm_glucose_mgdl"],
-        }
-    ).set_index("time")
-    st.line_chart(cgm_compare_df)
+    # ── AI Verdict ────────────────────────────────────────────────────────
+    verdict_lines: list[str] = []
 
-    st.markdown("### Insulin Delivery Comparison")
-    insulin_compare_df = pd.DataFrame(
-        {
-            "time": records_a_df["timestamp_min"],
-            "Scenario A Recommended": records_a_df["recommended_units"],
-            "Scenario A Delivered": records_a_df["pump_delivered_units"],
-            "Scenario B Recommended": records_b_df["recommended_units"],
-            "Scenario B Delivered": records_b_df["pump_delivered_units"],
-        }
-    ).set_index("time")
-    st.line_chart(insulin_compare_df)
-
-    st.markdown("### Safety Intervention Overlay")
-
-    safety_overlay_df = pd.DataFrame({
-        "time": records_a_df["timestamp_min"],
-        "A Blocked": (records_a_df["safety_status"] == "blocked").astype(int),
-        "A Clipped": (records_a_df["safety_status"] == "clipped").astype(int),
-        "B Blocked": (records_b_df["safety_status"] == "blocked").astype(int),
-        "B Clipped": (records_b_df["safety_status"] == "clipped").astype(int),
-    }).set_index("time")
-
-    st.bar_chart(safety_overlay_df)
-
-    st.markdown("### AI Comparative Verdict")
-
-    verdict_lines = []
-
-    # Time in range comparison
     if summary_a.percent_time_in_range > summary_b.percent_time_in_range:
-        verdict_lines.append("Scenario A maintains better glucose control (higher time in range).")
+        verdict_lines.append(
+            f"[TIR]   A outperforms B on glycemic control "
+            f"({summary_a.percent_time_in_range:.1f}% vs {summary_b.percent_time_in_range:.1f}% in range)."
+        )
     elif summary_b.percent_time_in_range > summary_a.percent_time_in_range:
-        verdict_lines.append("Scenario B maintains better glucose control (higher time in range).")
+        verdict_lines.append(
+            f"[TIR]   B outperforms A on glycemic control "
+            f"({summary_b.percent_time_in_range:.1f}% vs {summary_a.percent_time_in_range:.1f}% in range)."
+        )
+    else:
+        verdict_lines.append("[TIR]   Both scenarios achieve identical time-in-range.")
 
-    # Peak glucose comparison
-    if summary_b.peak_cgm_glucose_mgdl > summary_a.peak_cgm_glucose_mgdl:
-        verdict_lines.append("Scenario B experiences higher glucose spikes, indicating greater metabolic stress.")
+    if summary_b.peak_cgm_glucose_mgdl > summary_a.peak_cgm_glucose_mgdl + 10:
+        verdict_lines.append(
+            f"[PEAK]  B exhibits higher excursion risk "
+            f"(peak {summary_b.peak_cgm_glucose_mgdl:.0f} vs {summary_a.peak_cgm_glucose_mgdl:.0f} mg/dL)."
+        )
+    elif summary_a.peak_cgm_glucose_mgdl > summary_b.peak_cgm_glucose_mgdl + 10:
+        verdict_lines.append(
+            f"[PEAK]  A exhibits higher excursion risk "
+            f"(peak {summary_a.peak_cgm_glucose_mgdl:.0f} vs {summary_b.peak_cgm_glucose_mgdl:.0f} mg/dL)."
+        )
 
-    # Safety intervention comparison
-    if summary_b.blocked_decisions + summary_b.clipped_decisions > summary_a.blocked_decisions + summary_a.clipped_decisions:
-        verdict_lines.append("Scenario B triggers more safety interventions, suggesting constraint pressure on dosing.")
-    elif summary_a.blocked_decisions + summary_a.clipped_decisions > summary_b.blocked_decisions + summary_b.clipped_decisions:
-        verdict_lines.append("Scenario A triggers more safety interventions.")
+    ints_a = summary_a.blocked_decisions + summary_a.clipped_decisions
+    ints_b = summary_b.blocked_decisions + summary_b.clipped_decisions
+    if ints_b > ints_a:
+        verdict_lines.append(
+            f"[SAFETY] B triggers more safety interventions ({ints_b} vs {ints_a}), "
+            f"indicating greater constraint pressure on dosing."
+        )
+    elif ints_a > ints_b:
+        verdict_lines.append(
+            f"[SAFETY] A triggers more safety interventions ({ints_a} vs {ints_b})."
+        )
 
-    # Insulin comparison
-    if summary_b.total_insulin_delivered_u > summary_a.total_insulin_delivered_u:
-        verdict_lines.append("Scenario B requires significantly more insulin delivery.")
+    if summary_b.total_insulin_delivered_u > summary_a.total_insulin_delivered_u * 1.15:
+        verdict_lines.append(
+            f"[INSULIN] B requires {summary_b.total_insulin_delivered_u - summary_a.total_insulin_delivered_u:.2f} U "
+            f"more insulin than A."
+        )
+
+    if summary_a.glucose_variability_sd_mgdl < summary_b.glucose_variability_sd_mgdl:
+        verdict_lines.append(
+            f"[VAR]   A shows lower glycemic variability "
+            f"(SD {summary_a.glucose_variability_sd_mgdl:.1f} vs {summary_b.glucose_variability_sd_mgdl:.1f} mg/dL)."
+        )
 
     if not verdict_lines:
-        verdict_lines.append("Both scenarios behave similarly under current constraints.")
+        verdict_lines.append("[INFO]  Both scenarios behave similarly under current constraints.")
 
-    for line in verdict_lines:
-        st.write(f"- {line}")
+    verdict_text = "\n".join(f"  {line}" for line in verdict_lines)
 
+    st.markdown(f"""
+    <div style="margin-top:1rem;">
+      <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                  letter-spacing:4px; text-transform:uppercase; margin-bottom:0.5rem;">
+        ── AI COMPARATIVE VERDICT
+      </div>
+      <div style="background:{BG2}; border:1px solid {NEON_DIM}; border-left:3px solid {NEON};
+                  border-radius:3px; padding:1.25rem 1.5rem; font-family:'Share Tech Mono',monospace;
+                  font-size:0.8rem; color:{WHITE}; line-height:2;
+                  white-space:pre; overflow-x:auto;">
+<span style="color:{NEON_DIM}">$ swarm-bolus --verdict</span>
 
+{verdict_text}
+
+<span style="color:{NEON_DIM}; animation:blink 1s step-end infinite;">▌</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 else:
-    st.info("Choose Scenario A and Scenario B in the sidebar, then click 'Run Comparison'.")
+    # ── Landing state ─────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="display:flex; align-items:center; justify-content:center;
+                min-height:340px; border:1px solid {NEON_DIM}; border-radius:3px;
+                background:{BG2}; margin-top:1rem;">
+      <div style="text-align:center;">
+        <div style="font-family:'Orbitron',monospace; font-size:1.2rem; color:{NEON_DIM};
+                    letter-spacing:6px; text-transform:uppercase; margin-bottom:1rem;">
+          AWAITING INPUT
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:{MUTED};
+                    letter-spacing:2px; text-transform:uppercase; line-height:2;">
+          Select scenarios in the sidebar<br/>
+          Configure safety &amp; pump parameters<br/>
+          Press <span style="color:{NEON}">▶ RUN COMPARISON</span> to simulate
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
