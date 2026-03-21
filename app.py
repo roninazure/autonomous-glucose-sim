@@ -264,7 +264,7 @@ if run_button:
             ],
         }
     )
-    st.dataframe(compare_df, width="stretch")
+    st.dataframe(compare_df, use_container_width=True)
 
     st.markdown("### CGM Trajectory Comparison")
     cgm_compare_df = pd.DataFrame(
