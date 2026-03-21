@@ -84,7 +84,8 @@ def run_evaluation(
             autonomous_isf=autonomous_isf,
         )
 
-        signal, prediction, recommendation, meal_signal = run_controller(controller_inputs)
+        signal, prediction, recommendation, classification = run_controller(controller_inputs)
+        meal_signal = classification.meal_signal if classification else None
 
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
@@ -162,6 +163,11 @@ def run_evaluation(
                 meal_phase=meal_signal.phase.value if meal_signal else "none",
                 meal_estimated_carbs_g=meal_signal.estimated_carbs_g if meal_signal else 0.0,
                 meal_confidence=meal_signal.confidence if meal_signal else 0.0,
+                basal_drift_detected=classification.basal_signal.detected if classification and classification.basal_signal else False,
+                basal_drift_type=classification.basal_signal.drift_type.value if classification and classification.basal_signal else "none",
+                basal_drift_rate_mgdl_per_min=classification.basal_signal.sustained_rate_mgdl_per_min if classification and classification.basal_signal else 0.0,
+                basal_drift_linearity=classification.basal_signal.linearity_score if classification and classification.basal_signal else 0.0,
+                glucose_cause=classification.cause.value if classification else "flat",
             )
         )
 

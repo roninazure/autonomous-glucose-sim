@@ -1,3 +1,33 @@
+"""Cause-aware correction recommender.
+
+Dosing strategy depends on *why* glucose is rising, not just *how much*.
+
+MEAL (ONSET)
+    First-phase response: pre-bolus covers the leading edge of carb absorption.
+    Sized from the carb estimate and autonomously-inferred ISF.  Conservative
+    (40% of estimated impact) — the remaining excursion is handled by the
+    adaptive micro-bolus loop.
+
+MEAL (PEAK / ongoing)
+    Standard tiered micro-bolus: fraction determined by rate of rise.
+    ISF derived autonomously from the current rate.
+
+BASAL DRIFT
+    Small, sustained correction: the excursion is slow and linear, not a sharp
+    spike.  The dose fraction is capped at 0.25 (25% of the calculated
+    correction) to avoid over-correcting a gradual drift.  Multiple small doses
+    accumulate as the drift continues — mimicking a temporary basal increase.
+
+REBOUND
+    Conservative correction: glucose may stabilise on its own after a low.
+    Fraction capped at 0.10 — only the most cautious nudge.
+
+MIXED
+    Meal strategy takes priority (the meal is the dominant signal).
+
+FLAT
+    Standard correction if predicted glucose exceeds target; no proactive dose.
+"""
 from __future__ import annotations
 
 from ags.controller.state import (
@@ -6,6 +36,7 @@ from ags.controller.state import (
     ExcursionSignal,
     GlucosePrediction,
 )
+from ags.detection.state import GlucoseCause, GlucoseDynamicsClassification
 
 # ── Autonomous ISF estimation ─────────────────────────────────────────────────
 
@@ -107,34 +138,77 @@ def recommend_correction(
     inputs: ControllerInputs,
     prediction: GlucosePrediction,
     signal: ExcursionSignal | None = None,
+    classification: GlucoseDynamicsClassification | None = None,
 ) -> CorrectionRecommendation:
-    # ── Autonomous pre-bolus on meal ONSET ───────────────────────────────────
-    # If the meal detector has flagged ONSET, fire a pre-bolus immediately —
-    # before the glucose excursion shows up in the prediction horizon.  This
-    # mirrors the biological pancreas's first-phase insulin response: rapid
-    # secretion triggered by the earliest glucose rise signal.
-    meal = inputs.meal_signal
-    if (
-        inputs.autonomous_isf
-        and meal is not None
-        and meal.recommend_prebolus
-        and meal.estimated_carbs_g > 0
-    ):
-        base_isf, isf_label = _isf_from_ror(
-            signal.rate_mgdl_per_min if signal is not None else meal.smoothed_rate_mgdl_per_min
-        )
-        effective_isf = _refine_isf_from_observations(base_isf, inputs.isf_observations)
-        pre_units = _prebolus_units(meal.estimated_carbs_g, effective_isf)
-        return CorrectionRecommendation(
-            recommended_units=pre_units,
-            reason=(
-                f"autonomous pre-bolus: meal ONSET detected | "
-                f"~{meal.estimated_carbs_g:.0f}g estimated | "
-                f"confidence {meal.confidence:.0%} | "
-                f"ISF {effective_isf:.0f} [{isf_label}]"
-            ),
-        )
 
+    # ── Autonomous cause-aware path ───────────────────────────────────────────
+    if inputs.autonomous_isf and classification is not None:
+        cause = classification.cause
+        rate = (
+            signal.rate_mgdl_per_min
+            if signal is not None
+            else (classification.meal_signal.smoothed_rate_mgdl_per_min if classification.meal_signal else 0.0)
+        )
+        base_isf, isf_label = _isf_from_ror(rate)
+        effective_isf = _refine_isf_from_observations(base_isf, inputs.isf_observations)
+
+        # ── MEAL ONSET: first-phase pre-bolus ────────────────────────────────
+        meal = classification.meal_signal
+        if cause in (GlucoseCause.MEAL, GlucoseCause.MIXED):
+            if meal is not None and meal.recommend_prebolus and meal.estimated_carbs_g > 0:
+                pre_units = _prebolus_units(meal.estimated_carbs_g, effective_isf)
+                return CorrectionRecommendation(
+                    recommended_units=pre_units,
+                    reason=(
+                        f"pre-bolus | meal ONSET | "
+                        f"~{meal.estimated_carbs_g:.0f}g | "
+                        f"conf {meal.confidence:.0%} | "
+                        f"ISF {effective_isf:.0f} [{isf_label}]"
+                    ),
+                )
+
+        # ── BASAL DRIFT: small sustained micro-bolus ──────────────────────────
+        if cause == GlucoseCause.BASAL_DRIFT:
+            drift = classification.basal_signal
+            excursion = prediction.predicted_glucose_mgdl - inputs.target_glucose_mgdl
+            if excursion <= 0 or drift is None:
+                return CorrectionRecommendation(
+                    recommended_units=0.0,
+                    reason="basal drift detected but predicted glucose at or below target",
+                )
+            # Cap fraction at 0.25 — we're correcting a slow creep, not a spike.
+            # Multiple small doses accumulate across the drift window.
+            full_correction = excursion / effective_isf
+            basal_dose = full_correction * 0.25
+            return CorrectionRecommendation(
+                recommended_units=basal_dose,
+                reason=(
+                    f"basal drift correction | {drift.drift_type.value} | "
+                    f"rate {drift.sustained_rate_mgdl_per_min:+.2f} mg/dL/min | "
+                    f"linearity {drift.linearity_score:.0%} | "
+                    f"ISF {effective_isf:.0f} [{isf_label}] | "
+                    f"micro-dose 25%"
+                ),
+            )
+
+        # ── REBOUND: very conservative touch ─────────────────────────────────
+        if cause == GlucoseCause.REBOUND:
+            excursion = prediction.predicted_glucose_mgdl - inputs.target_glucose_mgdl
+            if excursion <= 0:
+                return CorrectionRecommendation(
+                    recommended_units=0.0,
+                    reason="rebound detected but predicted glucose at or below target",
+                )
+            full_correction = excursion / effective_isf
+            return CorrectionRecommendation(
+                recommended_units=full_correction * 0.10,
+                reason=(
+                    f"rebound correction (post-hypo) | "
+                    f"ISF {effective_isf:.0f} | micro-dose 10% — monitor"
+                ),
+            )
+
+    # ── Standard (non-autonomous) path or FLAT/MEAL PEAK ─────────────────────
     excursion_above_target = prediction.predicted_glucose_mgdl - inputs.target_glucose_mgdl
 
     if excursion_above_target <= 0:
@@ -164,12 +238,8 @@ def recommend_correction(
     full_correction = max(0.0, excursion_above_target / effective_isf)
 
     # Determine micro-bolus fraction — either dynamic (RoR-tiered) or fixed.
-    # In autonomous mode the RoR already sized the dose, so we always use 1.0
-    # for aggressive spikes and the standard tier table otherwise.
     if inputs.autonomous_isf and signal is not None:
         fraction = _ror_to_microbolus_fraction(signal.rate_mgdl_per_min)
-        # Fast spikes already get a lower ISF (larger dose) — apply fraction on
-        # top so the system still micro-doses rather than front-loading.
         tier_label = f"RoR-tiered {signal.rate_mgdl_per_min:+.1f} mg/dL/min → {fraction:.0%}"
     elif inputs.ror_tiered_microbolus and signal is not None:
         fraction = _ror_to_microbolus_fraction(signal.rate_mgdl_per_min)

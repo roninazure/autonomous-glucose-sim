@@ -253,41 +253,59 @@ def _layout(title: str = "", height: int = 320) -> dict:
 
 
 # ── Chart builders ───────────────────────────────────────────────────────────
-def _add_meal_detection_annotations(fig: go.Figure, df: pd.DataFrame, color: str) -> None:
-    """Overlay autonomous meal detection events on a CGM chart.
-
-    Draws a vertical shaded band at each ONSET window and a small marker
-    indicating the first detection, so the user can see exactly when the
-    self-driving pancreas 'noticed' the meal — without being told about it.
-    """
-    if "meal_detected" not in df.columns:
+def _vrect_bands(
+    fig: go.Figure,
+    df: pd.DataFrame,
+    phase_col: str,
+    active_values: list[str],
+    color: str,
+    opacity: float,
+    label: str,
+) -> None:
+    """Group consecutive rows matching active_values into shaded vrect bands."""
+    if phase_col not in df.columns:
         return
-
-    onset_rows = df[df["meal_phase"] == "onset"]
-    if onset_rows.empty:
-        return
-
-    # Group consecutive ONSET steps into single bands
     in_band = False
     band_start = None
+    first_band = True
     for _, row in df.iterrows():
-        if row["meal_phase"] == "onset" and not in_band:
+        active = row[phase_col] in active_values
+        if active and not in_band:
             band_start = row["timestamp_min"]
             in_band = True
-        elif row["meal_phase"] != "onset" and in_band:
+        elif not active and in_band:
             fig.add_vrect(
                 x0=band_start, x1=row["timestamp_min"],
-                fillcolor=color, opacity=0.10, line_width=0,
-                annotation_text="meal detected",
-                annotation_position="top left",
-                annotation_font=dict(size=8, color=color),
+                fillcolor=color, opacity=opacity, line_width=0,
+                **(dict(
+                    annotation_text=label,
+                    annotation_position="top left",
+                    annotation_font=dict(size=8, color=color),
+                ) if first_band else {}),
             )
+            first_band = False
             in_band = False
     if in_band and band_start is not None:
         fig.add_vrect(
             x0=band_start, x1=df["timestamp_min"].iloc[-1],
-            fillcolor=color, opacity=0.10, line_width=0,
+            fillcolor=color, opacity=opacity, line_width=0,
         )
+
+
+def _add_meal_detection_annotations(fig: go.Figure, df: pd.DataFrame, color: str) -> None:
+    """Overlay autonomous meal detection events on a CGM chart."""
+    _vrect_bands(fig, df, "meal_phase", ["onset"], color, 0.10, "meal detected")
+
+
+def _add_drift_annotations(fig: go.Figure, df: pd.DataFrame, color: str) -> None:
+    """Overlay basal drift detection windows on a CGM chart."""
+    if "basal_drift_detected" not in df.columns:
+        return
+    _vrect_bands(
+        fig, df, "basal_drift_type",
+        ["sustained", "dawn", "rebound"],
+        color, 0.08, "basal drift",
+    )
 
 
 def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) -> go.Figure:
@@ -306,10 +324,12 @@ def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
     fig.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
                   annotation=dict(text="Very High  250", font=dict(color=RED, size=9, family="Inter"), xanchor="left"))
 
-    # Autonomous meal detection bands — shaded regions where the system
-    # inferred a meal without being told
+    # Autonomous detection bands — shaded regions where the system
+    # inferred the cause of a glucose rise without being told
     _add_meal_detection_annotations(fig, df_a, NEON)
     _add_meal_detection_annotations(fig, df_b, CYAN)
+    _add_drift_annotations(fig, df_a, "#ff9500")   # amber for drift on A
+    _add_drift_annotations(fig, df_b, "#cc7700")   # darker amber for drift on B
 
     fig.add_trace(go.Scatter(
         x=df_a["timestamp_min"], y=df_a["cgm_glucose_mgdl"],
