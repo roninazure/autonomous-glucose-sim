@@ -52,6 +52,7 @@ def run_profile_sweep(
     min_excursion_delta_mgdl: float = 0.0,
     microbolus_fraction: float = 1.0,
     ror_tiered_microbolus: bool = False,
+    autonomous_isf: bool = False,
     dual_wave_config: DualWaveConfig | None = None,
     profiles: list[PatientProfile] | None = None,
 ) -> list[SweepResult]:
@@ -90,6 +91,7 @@ def run_profile_sweep(
             min_excursion_delta_mgdl=min_excursion_delta_mgdl,
             microbolus_fraction=microbolus_fraction,
             ror_tiered_microbolus=ror_tiered_microbolus,
+            autonomous_isf=autonomous_isf,
             dual_wave_config=dual_wave_config,
         )
 

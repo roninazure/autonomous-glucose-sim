@@ -27,6 +27,7 @@ def run_evaluation(
     min_excursion_delta_mgdl: float = 0.0,
     microbolus_fraction: float = 1.0,
     ror_tiered_microbolus: bool = False,
+    autonomous_isf: bool = False,
     dual_wave_config: DualWaveConfig | None = None,
 ) -> tuple[list[TimestepRecord], RunSummary]:
     safety_thresholds = safety_thresholds or SafetyThresholds()
@@ -80,6 +81,7 @@ def run_evaluation(
             microbolus_fraction=microbolus_fraction,
             step_minutes=step_minutes,
             ror_tiered_microbolus=ror_tiered_microbolus,
+            autonomous_isf=autonomous_isf,
         )
 
         signal, prediction, recommendation = run_controller(controller_inputs)

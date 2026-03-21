@@ -771,31 +771,49 @@ with st.sidebar:
     )
 
     st.header("Patient Profile")
-    _use_weight_isf = st.checkbox(
-        "Estimate insulin sensitivity from weight",
-        value=False,
-        help="Uses the 1700 Rule: ISF = 1700 ÷ total daily dose, "
-             "where total daily dose ≈ body weight (kg) × 0.55. "
-             "You can override the result manually.",
+
+    _autonomous_isf = st.checkbox(
+        "Autonomous mode — infer sensitivity from glucose dynamics",
+        value=True,
+        help="The system watches how fast glucose is spiking and automatically infers "
+             "insulin sensitivity from that signal — no ISF input required.\n\n"
+             "Fast spike (≥3 mg/dL/min) → patient is insulin resistant → system doses more aggressively.\n"
+             "Slow/flat rise → patient is sensitive → system doses conservatively.\n\n"
+             "This is the artificial-pancreas / Tesla model: no pre-programmed sensitivity number needed.",
     )
-    _weight_kg = st.slider(
-        "Body weight (kg)",
-        30.0, 150.0, 70.0, 1.0,
-    )
-    if _use_weight_isf:
-        _auto_isf = estimate_isf_from_weight(_weight_kg)
+
+    if _autonomous_isf:
         st.caption(
-            f"Estimated sensitivity: **{_auto_isf:.1f} mg/dL per unit**  "
-            f"(daily dose ≈ {_weight_kg * 0.55:.1f} U)"
+            "Sensitivity is inferred automatically from the rate of glucose rise. "
+            "No manual ISF input required."
         )
-        correction_factor_mgdl_per_unit = _auto_isf
+        correction_factor_mgdl_per_unit = 50.0  # fallback value, ignored in autonomous mode
     else:
-        correction_factor_mgdl_per_unit = st.slider(
-            "Insulin sensitivity — mg/dL drop per unit",
-            20.0, 120.0, 50.0, 1.0,
-            help="How much blood glucose drops per unit of insulin for this patient. "
-                 "30 = insulin resistant, 50 = typical adult, 85 = highly sensitive.",
+        _use_weight_isf = st.checkbox(
+            "Estimate insulin sensitivity from weight",
+            value=False,
+            help="Uses the 1700 Rule: ISF = 1700 ÷ total daily dose, "
+                 "where total daily dose ≈ body weight (kg) × 0.55. "
+                 "You can override the result manually.",
         )
+        _weight_kg = st.slider(
+            "Body weight (kg)",
+            30.0, 150.0, 70.0, 1.0,
+        )
+        if _use_weight_isf:
+            _auto_isf = estimate_isf_from_weight(_weight_kg)
+            st.caption(
+                f"Estimated sensitivity: **{_auto_isf:.1f} mg/dL per unit**  "
+                f"(daily dose ≈ {_weight_kg * 0.55:.1f} U)"
+            )
+            correction_factor_mgdl_per_unit = _auto_isf
+        else:
+            correction_factor_mgdl_per_unit = st.slider(
+                "Insulin sensitivity — mg/dL drop per unit",
+                20.0, 120.0, 50.0, 1.0,
+                help="How much blood glucose drops per unit of insulin for this patient. "
+                     "30 = insulin resistant, 50 = typical adult, 85 = highly sensitive.",
+            )
 
     st.header("Safety Limits")
     max_units_per_interval = st.slider(
@@ -1139,6 +1157,7 @@ if run_button:
             min_excursion_delta_mgdl=min_excursion_delta,
             microbolus_fraction=microbolus_fraction,
             ror_tiered_microbolus=_ror_tiered,
+            autonomous_isf=_autonomous_isf,
             dual_wave_config=dual_wave_config,
         )
         with st.spinner(""):
@@ -1297,6 +1316,7 @@ if run_button:
                 min_excursion_delta_mgdl=min_excursion_delta,
                 microbolus_fraction=microbolus_fraction,
                 ror_tiered_microbolus=_ror_tiered,
+                autonomous_isf=_autonomous_isf,
                 dual_wave_config=dual_wave_config,
             )
             records_b, summary_b = run_evaluation(
@@ -1310,6 +1330,7 @@ if run_button:
                 min_excursion_delta_mgdl=min_excursion_delta,
                 microbolus_fraction=microbolus_fraction,
                 ror_tiered_microbolus=_ror_tiered,
+                autonomous_isf=_autonomous_isf,
                 dual_wave_config=dual_wave_config,
             )
 
