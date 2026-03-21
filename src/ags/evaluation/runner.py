@@ -8,6 +8,7 @@ from ags.pump.state import PumpConfig
 from ags.safety.pipeline import run_controller_with_safety
 from ags.safety.state import SafetyThresholds
 from ags.simulation.engine import run_simulation
+from ags.simulation.insulin import advance_insulin_compartments, insulin_on_board
 from ags.simulation.state import SimulationInputs
 
 
@@ -18,6 +19,8 @@ def run_evaluation(
     duration_minutes: int = 180,
     step_minutes: int = 5,
     seed: int = 42,
+    target_glucose_mgdl: float = 110.0,
+    correction_factor_mgdl_per_unit: float = 50.0,
 ) -> tuple[list[TimestepRecord], RunSummary]:
     safety_thresholds = safety_thresholds or SafetyThresholds()
     pump_config = pump_config or PumpConfig()
@@ -31,13 +34,19 @@ def run_evaluation(
 
     records: list[TimestepRecord] = []
 
+    # Track the 2-compartment PK/PD state independently so that each
+    # delivered dose feeds back into the next timestep's controller and safety
+    # decisions using the same physiologically accurate model as the simulation.
+    tracked_x1 = snapshots[0].insulin_compartment1_u
+    tracked_x2 = snapshots[0].insulin_compartment2_u
+
     for previous, current in zip(snapshots[:-1], snapshots[1:]):
         controller_inputs = ControllerInputs(
             current_glucose_mgdl=current.cgm_glucose_mgdl,
             previous_glucose_mgdl=previous.cgm_glucose_mgdl,
-            insulin_on_board_u=current.insulin_on_board_u,
-            target_glucose_mgdl=110.0,
-            correction_factor_mgdl_per_unit=50.0,
+            insulin_on_board_u=insulin_on_board(tracked_x1, tracked_x2),
+            target_glucose_mgdl=target_glucose_mgdl,
+            correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
         )
 
         _, _, recommendation, safety_decision = run_controller_with_safety(
@@ -48,6 +57,16 @@ def run_evaluation(
         pump_result = run_pump_with_safety_output(
             safety_decision=safety_decision,
             pump_config=pump_config,
+        )
+
+        # Advance PK/PD state: the delivered dose enters the subcutaneous
+        # depot (x1) and transfers into the active pool (x2) over time.
+        tracked_x1, tracked_x2 = advance_insulin_compartments(
+            x1=tracked_x1,
+            x2=tracked_x2,
+            dose_u=pump_result.delivered_units,
+            step_minutes=step_minutes,
+            peak_minutes=simulation_inputs.insulin_peak_minutes,
         )
 
         records.append(
