@@ -38,8 +38,9 @@ from ags.safety.integration import build_safety_inputs
 from ags.safety.state import SafetyThresholds, SuspendState
 
 _HISTORY_WINDOW = 5
-_RISE_THRESHOLD = 5.0    # mg/dL per step — must match detector.py defaults
-_FALL_THRESHOLD = -5.0
+# Rate-of-rise thresholds in mg/dL/min (detector.py uses per-minute rates).
+_RISE_THRESHOLD_PER_MIN = 1.0
+_FALL_THRESHOLD_PER_MIN = -1.0
 
 
 def annotate_run(
@@ -103,6 +104,7 @@ def annotate_run(
             glucose_history=list(cgm_history),
             min_excursion_delta_mgdl=min_excursion_delta_mgdl,
             microbolus_fraction=microbolus_fraction,
+            step_minutes=step_minutes,
         )
 
         signal, prediction, recommendation = run_controller(controller_inputs)
@@ -121,15 +123,14 @@ def annotate_run(
         )
 
         # ── Derive display values ─────────────────────────────────────────
-        delta = signal.glucose_delta_mgdl
-        if delta >= _RISE_THRESHOLD:
+        trend_rate = signal.rate_mgdl_per_min  # already normalised to mg/dL/min
+
+        if trend_rate >= _RISE_THRESHOLD_PER_MIN:
             trend_arrow = "↑"
-        elif delta <= _FALL_THRESHOLD:
+        elif trend_rate <= _FALL_THRESHOLD_PER_MIN:
             trend_arrow = "↓"
         else:
             trend_arrow = "→"
-
-        trend_rate = delta / step_minutes  # mg/dL per minute
 
         is_now_suspended = suspend_state.is_suspended
         gate = gate_from_reason(safety_decision.reason, is_now_suspended)

@@ -15,10 +15,10 @@ if str(SRC_PATH) not in sys.path:
 import json
 
 from ags.evaluation.profile_sweep import build_sweep_export, run_profile_sweep
-from ags.evaluation.profiles import ALL_PROFILES
+from ags.evaluation.profiles import ALL_PROFILES, estimate_isf_from_weight
 from ags.evaluation.report import generate_report
 from ags.evaluation.runner import run_evaluation
-from ags.pump.state import PumpConfig
+from ags.pump.state import DualWaveConfig, PumpConfig
 from ags.explainability.annotator import annotate_run
 from ags.explainability.state import GATE_COLOURS, GATE_LABELS
 from ags.retrospective.loader import CgmParseError, parse_cgm_text, readings_to_csv
@@ -508,7 +508,7 @@ st.markdown(f"""
   </div>
   <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem;
               color:{MUTED}; letter-spacing:5px; margin-top:0.5rem; text-transform:uppercase;">
-    Autonomous Glucose Simulation · 2-Compartment PK/PD · Gamma Gut Model
+    Autonomous Glucose Simulation · 2-Compartment PK/PD · Gamma Gut Model · 1-min CGM
   </div>
   <div style="margin-top:1rem; display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
     <span style="background:{BG2}; border:1px solid {RED}; color:{RED};
@@ -525,6 +525,16 @@ st.markdown(f"""
                  padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
                  font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
       ◉ SAFETY LAYER ENABLED
+    </span>
+    <span style="background:{BG2}; border:1px solid {CYAN}; color:{CYAN};
+                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
+                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
+      ◉ DUAL-WAVE BOLUS
+    </span>
+    <span style="background:{BG2}; border:1px solid {CYAN}; color:{CYAN};
+                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
+                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
+      ◉ RoR-TIERED MICRO-BOLUS
     </span>
   </div>
 </div>
@@ -614,23 +624,102 @@ with st.sidebar:
 
     st.header("Simulation")
     duration_minutes = st.slider("Duration (minutes)", 30, 360, 180, 30)
-    step_minutes = st.selectbox("Timestep (minutes)", [5, 10, 15], index=0)
+    step_minutes = st.selectbox(
+        "Timestep (minutes)",
+        [1, 5, 10, 15],
+        index=1,
+        help="1 min = FreeStyle Libre cadence (reads every 60 s). "
+             "5 min = Dexcom G6/G7 cadence. All thresholds scale automatically.",
+    )
+
+    st.header("Patient")
+    _use_weight_isf = st.checkbox(
+        "Estimate ISF from weight (1700 Rule)",
+        value=False,
+        help="Computes ISF = 1700 ÷ (weight × 0.55). "
+             "Override with the manual slider below if needed.",
+    )
+    _weight_kg = st.slider(
+        "Body weight (kg)",
+        30.0, 150.0, 70.0, 1.0,
+        help="Used only when 'Estimate ISF from weight' is checked.",
+    )
+    if _use_weight_isf:
+        _auto_isf = estimate_isf_from_weight(_weight_kg)
+        st.caption(f"Auto ISF: {_auto_isf:.1f} mg/dL/U  (TDD ≈ {_weight_kg * 0.55:.1f} U/day)")
+        correction_factor_mgdl_per_unit = _auto_isf
+    else:
+        correction_factor_mgdl_per_unit = st.slider(
+            "Correction factor (ISF, mg/dL/U)",
+            20.0, 120.0, 50.0, 1.0,
+            help="Manual ISF. 1 unit of insulin lowers glucose by this many mg/dL.",
+        )
 
     st.header("Safety Layer")
-    max_units_per_interval = st.slider("Max units per interval", 0.1, 3.0, 1.0, 0.05)
+    max_units_per_interval = st.slider("Max units per interval", 0.05, 3.0, 1.0, 0.05)
     max_insulin_on_board_u = st.slider("Max insulin on board (U)", 0.5, 10.0, 3.0, 0.1)
     min_predicted_glucose_mgdl = st.slider("Min predicted glucose (mg/dL)", 60, 120, 80, 1)
     require_confirmed_trend = st.checkbox("Require confirmed rising trend", value=True)
 
     st.header("Controller")
-    min_excursion_delta = st.slider("Min excursion delta (mg/dL)", 0.0, 15.0, 0.0, 0.5,
-                                    help="Minimum glucose change per step to trigger correction. Filters noise-driven micro-excursions.")
-    microbolus_fraction = st.slider("Microbolus fraction", 0.1, 1.0, 1.0, 0.05,
-                                    help="Scale correction down to a fraction of full dose. 0.25 = quarter-dose microbolus strategy.")
+    min_excursion_delta = st.slider(
+        "Min excursion delta (mg/dL)",
+        0.0, 15.0, 0.0, 0.5,
+        help="Minimum glucose change per step to trigger correction. "
+             "Filters noise-driven micro-excursions.",
+    )
+
+    _ror_tiered = st.checkbox(
+        "RoR-tiered micro-bolus",
+        value=False,
+        help="Dynamically scales the micro-bolus fraction based on rate of rise:\n"
+             "  < 1 mg/dL/min → 0% (flat, no dose)\n"
+             "  1–2 mg/dL/min → 25% of full correction\n"
+             "  2–3 mg/dL/min → 50%\n"
+             "  ≥ 3 mg/dL/min → 100% (aggressive spike)\n"
+             "Overrides the manual micro-bolus fraction slider when active.",
+    )
+    if _ror_tiered:
+        microbolus_fraction = 1.0   # unused — controller computes dynamically
+        st.caption("Fraction computed dynamically from RoR tier (see above).")
+    else:
+        microbolus_fraction = st.slider(
+            "Micro-bolus fraction",
+            0.0, 1.0, 0.25, 0.05,
+            help="Fixed fraction of full correction per interval. "
+                 "0.25 = quarter-dose micro-bolus strategy.",
+        )
+
+    st.header("Dual-Wave Bolus")
+    _dw_enabled = st.checkbox(
+        "Enable dual-wave (split) bolus",
+        value=False,
+        help="Splits each correction bolus into an immediate portion + "
+             "a slow extended tail, like a pump combo/dual-wave bolus.\n\n"
+             "Doctor's example: 30g carbs → 6U total → 2U quick + 4U over 20 min.",
+    )
+    if _dw_enabled:
+        _dw_imm_frac = st.slider(
+            "Immediate fraction",
+            0.1, 0.9, 0.33, 0.01,
+            help="Fraction of the bolus to deliver right now. "
+                 "Remainder drips over the extended duration. "
+                 "Doctor's example: 2/6 ≈ 0.33.",
+        )
+        _dw_ext_dur = st.selectbox(
+            "Extended duration (min)",
+            [10, 15, 20, 30, 45],
+            index=2,
+            help="Minutes over which the remaining dose is delivered evenly. "
+                 "Doctor's example: ~20 min.",
+        )
+    else:
+        _dw_imm_frac = 0.33
+        _dw_ext_dur = 20
 
     st.header("Pump")
     dose_increment_u = st.selectbox("Dose increment (U)", [0.05, 0.1], index=0)
-    pump_max_units_per_interval = st.slider("Pump max units per interval", 0.1, 3.0, 1.0, 0.05)
+    pump_max_units_per_interval = st.slider("Pump max units per interval", 0.05, 3.0, 1.0, 0.05)
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     _btn_labels = {
@@ -652,6 +741,11 @@ if run_button:
     pump_config = PumpConfig(
         dose_increment_u=dose_increment_u,
         max_units_per_interval=pump_max_units_per_interval,
+    )
+    dual_wave_config = DualWaveConfig(
+        enabled=_dw_enabled,
+        immediate_fraction=_dw_imm_frac,
+        extended_duration_minutes=int(_dw_ext_dur),
     )
 
     if dashboard_mode == "Retrospective Replay":
@@ -676,6 +770,7 @@ if run_button:
             min_excursion_delta_mgdl=min_excursion_delta,
             microbolus_fraction=microbolus_fraction,
             insulin_peak_minutes=float(retro_peak),
+            ror_tiered_microbolus=_ror_tiered,
         )
         with st.spinner(""):
             retro_records, retro_summary = run_retrospective(
@@ -862,6 +957,8 @@ if run_button:
             seed=42,
             min_excursion_delta_mgdl=min_excursion_delta,
             microbolus_fraction=microbolus_fraction,
+            ror_tiered_microbolus=_ror_tiered,
+            dual_wave_config=dual_wave_config,
         )
         with st.spinner(""):
             sweep_results = run_profile_sweep(
@@ -1015,8 +1112,11 @@ if run_button:
                 duration_minutes=duration_minutes,
                 step_minutes=step_minutes,
                 seed=42,
+                correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
                 min_excursion_delta_mgdl=min_excursion_delta,
                 microbolus_fraction=microbolus_fraction,
+                ror_tiered_microbolus=_ror_tiered,
+                dual_wave_config=dual_wave_config,
             )
             records_b, summary_b = run_evaluation(
                 simulation_inputs=build_scenario(scenario_b_name),
@@ -1025,8 +1125,11 @@ if run_button:
                 duration_minutes=duration_minutes,
                 step_minutes=step_minutes,
                 seed=42,
+                correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
                 min_excursion_delta_mgdl=min_excursion_delta,
                 microbolus_fraction=microbolus_fraction,
+                ror_tiered_microbolus=_ror_tiered,
+                dual_wave_config=dual_wave_config,
             )
 
         df_a = pd.DataFrame([r.__dict__ for r in records_a])

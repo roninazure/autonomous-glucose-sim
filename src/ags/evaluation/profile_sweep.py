@@ -26,7 +26,7 @@ from ags.evaluation.profiles import ALL_PROFILES, PatientProfile
 from ags.evaluation.report import generate_report
 from ags.evaluation.runner import run_evaluation
 from ags.evaluation.state import RunSummary, TimestepRecord
-from ags.pump.state import PumpConfig
+from ags.pump.state import DualWaveConfig, PumpConfig
 from ags.safety.state import SafetyThresholds
 from ags.simulation.state import SimulationInputs
 
@@ -51,6 +51,8 @@ def run_profile_sweep(
     correction_factor_mgdl_per_unit: float = 50.0,
     min_excursion_delta_mgdl: float = 0.0,
     microbolus_fraction: float = 1.0,
+    ror_tiered_microbolus: bool = False,
+    dual_wave_config: DualWaveConfig | None = None,
     profiles: list[PatientProfile] | None = None,
 ) -> list[SweepResult]:
     """Run ``base_scenario`` once per patient profile and return all results.
@@ -87,6 +89,8 @@ def run_profile_sweep(
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
             min_excursion_delta_mgdl=min_excursion_delta_mgdl,
             microbolus_fraction=microbolus_fraction,
+            ror_tiered_microbolus=ror_tiered_microbolus,
+            dual_wave_config=dual_wave_config,
         )
 
         report = generate_report(

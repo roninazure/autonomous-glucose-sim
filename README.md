@@ -17,7 +17,7 @@
 ![Boundary](https://img.shields.io/badge/⬡_Boundary-Simulation_Only-ff4d6d?style=flat-square&labelColor=050a06)
 ![Python](https://img.shields.io/badge/Python-3.10+-39ff14?style=flat-square&logo=python&logoColor=39ff14&labelColor=050a06)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-ff4d6d?style=flat-square&logo=streamlit&logoColor=white&labelColor=050a06)
-![Tests](https://img.shields.io/badge/Tests-185_passing-39ff14?style=flat-square&logo=pytest&logoColor=39ff14&labelColor=050a06)
+![Tests](https://img.shields.io/badge/Tests-210_passing-39ff14?style=flat-square&logo=pytest&logoColor=39ff14&labelColor=050a06)
 
 </div>
 
@@ -26,6 +26,7 @@
 <div align="center">
 
 *Simulation-first platform for building an autonomous insulin dosing engine.*<br/>
+*1-min CGM loop · dual-wave bolus · RoR-tiered micro-bolus · weight-based ISF*<br/>
 *Iterate on glucose dynamics, decision logic, and safety constraints — in a controlled, non-clinical environment.*
 
 </div>
@@ -64,13 +65,52 @@ The dashboard offers three evaluation modes:
 | Component | Role |
 |:--|:--|
 | **Physiology Engine** | Bergman 3-compartment model. Produces ground-truth glucose from patient params + meal events |
-| **CGM Sensor Model** | Gaussian noise, interstitial lag, calibration drift. Outputs realistic 5-min sensor readings |
-| **Controller** | Rule-based + ML-ready decision engine. Recommends bolus / basal adjustments |
+| **CGM Sensor Model** | Gaussian noise, interstitial lag, calibration drift. Outputs 1-min or 5-min sensor readings |
+| **Controller** | Rule-based + ML-ready decision engine. Recommends bolus / basal adjustments. RoR-tiered micro-bolus. |
 | **Safety Layer** | IOB tracking, hypo prediction, stateful suspension logic, hard clamps. Blocks or clips unsafe dosing |
-| **Pump Abstraction** | Delivery rate limits, infusion modeling, occlusion simulation |
+| **Pump Abstraction** | Delivery rate limits, dual-wave (split) bolus state machine, quantisation |
 | **Evaluation Engine** | Clinical metrics, scenario comparison, AI-generated verdict, Streamlit dashboard |
 | **Retrospective Engine** | Loads real or reference CGM traces; replays controller with hypothetical IOB accumulation |
 | **Explainability Engine** | Per-step `DecisionExplanation`: gate fired, reason, narrative. Rendered in interactive Decision Timeline |
+
+---
+
+## Algorithm Innovations
+
+Four clinically-motivated features added per physician specification:
+
+### 1 · 1-Minute CGM Loop (FreeStyle Libre Cadence)
+The controller loop now supports **1-minute timesteps**, matching the FreeStyle Libre's native 60-second sampling rate. All detection thresholds are expressed in **mg/dL/min** (not per-step counts), so behaviour is consistent regardless of whether the loop runs at 1-min or 5-min intervals. Set `Timestep = 1 min` in the sidebar.
+
+### 2 · Dual-Wave (Split) Bolus
+Mimics a **combo/dual-wave bolus** as used on insulin pumps today. Instead of one atomic dose, a correction is split into:
+- **Immediate portion** (e.g. ⅓ of total) — delivered now, hits the initial glucose spike in 5–10 min
+- **Extended tail** (remaining ⅔) — dripped evenly over a configurable window (default 20 min)
+
+*Doctor's example: 30g carbs → 6U total → 2U quick + 4U slowly.*
+
+Configure in sidebar: **Dual-Wave Bolus → Enable**, then set immediate fraction and extended duration.
+
+### 3 · Rate-of-Rise Tiered Micro-Bolus
+The controller scales its micro-bolus fraction **dynamically based on the observed rate of rise** (mg/dL/min), rather than using a fixed fraction. Tiers:
+
+| Rate | Action |
+|:--|:--|
+| < 1.0 mg/dL/min | No micro-bolus (flat / sensor noise) |
+| 1–2 mg/dL/min | 25% of full correction |
+| 2–3 mg/dL/min | 50% of full correction |
+| ≥ 3.0 mg/dL/min | 100% (aggressive spike — full correction) |
+
+Enable in sidebar: **Controller → RoR-tiered micro-bolus**.
+
+### 4 · Weight-Based ISF (1700 Rule)
+The Insulin Sensitivity Factor can be **estimated automatically from body weight** using the 1700 Rule:
+
+```
+ISF ≈ 1700 ÷ TDD       where  TDD ≈ weight_kg × 0.55
+```
+
+For a 70 kg patient: TDD ≈ 38.5 U/day → ISF ≈ 44 mg/dL/U. The insulin-to-carb ratio (ICR) is also estimated via the 500 Rule. Enable in sidebar: **Patient → Estimate ISF from weight**.
 
 ---
 
@@ -191,7 +231,7 @@ src/
     ├── retrospective/    <- CGM trace loader · reference traces · replay runner
     └── explainability/   <- DecisionExplanation · gate annotator · narrative generator
 
-tests/                    <- 185 tests, all passing
+tests/                    <- 210 tests, all passing
 docs/
 experiments/
 app.py                    <- Streamlit dashboard (Comparison · Profile Sweep · Retrospective Replay)
@@ -217,7 +257,7 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <br/>
 - Insulin-on-board (IOB) modeling with 2-compartment PK/PD<br/>
 - Stateful predictive hypoglycemia suspension with configurable resume margin<br/>
-- 5 independent safety gates: no-dose, trend confirmation, hypo guard, IOB guard, interval cap<br/>
+- 7 independent safety gates: no-dose, trend confirmation, hypo guard, IOB guard, interval cap, allowed ✓, SUSPENSION<br/>
 - Full auditability of every safety intervention via named gate identifiers
 </details>
 

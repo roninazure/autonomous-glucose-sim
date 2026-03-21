@@ -64,3 +64,56 @@ ALL_PROFILES: list[PatientProfile] = [
     HIGHLY_SENSITIVE,
     RAPID_RESPONDER,
 ]
+
+
+# ── Weight-based ISF estimation ───────────────────────────────────────────────
+
+def estimate_isf_from_weight(
+    weight_kg: float,
+    tdd_factor: float = 0.55,
+) -> float:
+    """Estimate insulin sensitivity factor (ISF) from body weight.
+
+    Uses the **1700 Rule**:
+        ISF (mg/dL/U) ≈ 1700 / TDD
+    where TDD (Total Daily Dose) is approximated as:
+        TDD ≈ weight_kg × tdd_factor
+
+    The default tdd_factor of 0.55 U/kg is a clinically validated median for
+    adult T1D patients on rapid-acting insulin analogues.  Adjust upward for
+    insulin-resistant patients (~0.7–0.8) and downward for highly sensitive
+    patients (~0.3–0.4).
+
+    Doctor's example: 30g carbs → 6U  →  ICR = 5 g/U
+        For a 70 kg patient: TDD ≈ 38.5 U  →  ISF ≈ 44 mg/dL/U  (close to
+        the Standard Adult archetype of 50 mg/dL/U).
+
+    Args:
+        weight_kg: Patient body weight in kilograms.
+        tdd_factor: Fraction of body weight (in kg) used to estimate TDD.
+
+    Returns:
+        Estimated ISF in mg/dL per unit, rounded to one decimal place.
+    """
+    tdd = max(1.0, weight_kg * tdd_factor)
+    return round(1700.0 / tdd, 1)
+
+
+def estimate_carb_ratio_from_weight(
+    weight_kg: float,
+    tdd_factor: float = 0.55,
+) -> float:
+    """Estimate insulin-to-carb ratio (ICR) from body weight.
+
+    Uses the **500 Rule**:
+        ICR (g/U) ≈ 500 / TDD
+
+    Args:
+        weight_kg: Patient body weight in kilograms.
+        tdd_factor: Fraction of body weight (in kg) used to estimate TDD.
+
+    Returns:
+        Estimated ICR in grams of carbs per unit, rounded to one decimal.
+    """
+    tdd = max(1.0, weight_kg * tdd_factor)
+    return round(500.0 / tdd, 1)
