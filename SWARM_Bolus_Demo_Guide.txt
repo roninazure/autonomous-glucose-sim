@@ -1,0 +1,233 @@
+================================================================
+  SWARM BOLUS — CLINICIAN DEMO GUIDE
+================================================================
+
+  Open in your browser — no install needed:
+
+  https://autonomous-glucose-sim-68ewedrurhijjbyiqjzgzk.streamlit.app
+
+  IMPORTANT: This is a simulation tool only.
+  It does not control real equipment or provide clinical advice.
+
+================================================================
+  OVERVIEW
+================================================================
+
+SWARM Bolus simulates a closed-loop autonomous insulin dosing
+algorithm. It lets you explore how the controller behaves across
+different patient types, clinical scenarios, and safety settings
+— all in a safe, synthetic environment with no real patients.
+
+Three modes are available (choose at the top of the left sidebar):
+
+  COMPARISON
+    Side-by-side: two clinical scenarios, same algorithm.
+    Best for "what if?" questions — e.g. missed bolus vs. no meal.
+
+  PROFILE SWEEP
+    One scenario run across four patient archetypes:
+    Standard / Insulin-Resistant / Sensitive / Rapid-Onset.
+    Shows how robust the algorithm is across a population.
+
+  RETROSPECTIVE REPLAY
+    Load a real CGM trace (or pick a built-in reference pattern)
+    and see what the algorithm would have decided at each step —
+    without affecting the actual glucose trajectory.
+
+
+================================================================
+  WHAT THE NUMBERS MEAN
+================================================================
+
+  Time in Range          % of readings between 70–180 mg/dL
+                         ADA/EASD target: > 70%
+
+  Average glucose        Mean CGM reading across the simulation
+                         Healthy target range: 80–140 mg/dL
+
+  Peak glucose           Highest point reached
+                         Concern threshold: > 250 mg/dL
+
+  Correction wanted      Total insulin the algorithm calculated
+                         it should give across all intervals
+
+  Actually delivered     What was actually given after the safety
+                         system applied its checks
+
+  Blocked by safety      Intervals where the algorithm wanted to
+                         dose but was held back (see note below)
+
+  Reduced to limit       Doses trimmed to the per-interval cap
+
+  Low-glucose holds      Intervals where all dosing was suspended
+                         because glucose was predicted to drop
+
+
+  WHY DOES "CORRECTION WANTED" GREATLY EXCEED "ACTUALLY DELIVERED"?
+
+  This is expected and intentional. Once active insulin already
+  in the body reaches the safety cap (default 3.0 U), the algorithm
+  holds back further doses until some of that insulin clears —
+  exactly like a cautious clinician avoiding insulin stacking.
+
+  The gap between these two numbers reflects the safety layer
+  working correctly, not a fault. To allow more aggressive
+  correction, raise "Maximum active insulin allowed" in the sidebar.
+
+
+================================================================
+  KEY SIDEBAR SETTINGS (SAFE TO ADJUST DURING DEMO)
+================================================================
+
+  PATIENT SETTINGS
+    Correction factor (ISF)
+      How much 1 unit of insulin drops glucose.
+      Typical range: 30–60 mg/dL per unit.
+
+    Estimate ISF from weight
+      Tick this and enter body weight in kg.
+      The app calculates ISF automatically using the 1700 Rule:
+        ISF = 1700 ÷ (weight_kg × 0.55)
+      Example: 70 kg patient → TDD ≈ 38.5 U → ISF ≈ 44 mg/dL/U
+
+  SAFETY LIMITS
+    Maximum insulin per dose
+      Hard cap on what can be given in a single 5-min interval.
+      Default: 1.0 U
+
+    Maximum active insulin allowed (IOB cap)
+      If total active insulin reaches this level, no more doses
+      are given until it clears. This is the primary control
+      over how aggressive or conservative the algorithm is.
+      Default: 3.0 U
+
+    Wait for two consecutive rising readings before dosing
+      Prevents the algorithm reacting to a single noisy CGM
+      reading. Recommended: keep this on.
+
+  DOSING STRATEGY
+    Fraction of correction to deliver each interval
+      0.25 = deliver 25% of the calculated correction (cautious)
+      1.00 = deliver the full correction in one go
+      Most closed-loop systems use 0.2–0.5 for safety.
+
+    Adjust dose size based on how fast glucose is rising
+      When enabled, the algorithm scales its dose automatically:
+        Flat / falling           → no dose
+        Rising slowly  < 1 mg/dL/min → no dose
+        Rising moderately 1–2   → 25% of correction
+        Rising quickly   2–3    → 50% of correction
+        Spiking          ≥ 3    → full correction
+
+
+================================================================
+  SUGGESTED DEMO FLOW (~10 MINUTES)
+================================================================
+
+  STEP 1 — COMPARISON MODE (3 min)
+    - Leave all settings at their defaults
+    - Press "Run Comparison"
+    - Review: Time in Range, peak glucose, the blue callout
+      explaining why doses were blocked
+    - Point out: "Correction wanted" vs "Actually delivered" gap
+
+  STEP 2 — CHANGE A SCENARIO (2 min)
+    - Change Scenario B to "Post-meal spike, missed bolus"
+    - Press "Run Comparison" again
+    - Show how TIR drops and peak glucose rises vs Scenario A
+
+  STEP 3 — PROFILE SWEEP (2 min)
+    - Switch mode to "Profile Sweep"
+    - Select the same scenario
+    - Press "Run Population Sweep"
+    - Show how the insulin-resistant profile performs differently
+      to the sensitive profile under identical settings
+
+  STEP 4 — RETROSPECTIVE REPLAY (3 min)
+    - Switch mode to "Retrospective Replay"
+    - Select built-in trace: "Post-prandial Spike"
+      (60g meal, missed bolus — glucose 110 → 239 → 134 mg/dL)
+    - Press "Run Retrospective Replay"
+    - Scroll down to the Decision log
+    - Expand a few rows to show the per-step reasoning
+      (what it saw, why it dosed or held back, plain English)
+
+
+================================================================
+  SAFETY CHART — WHAT THE SYMBOLS MEAN
+================================================================
+
+  Red ×      Dose blocked by the safety system
+             (IOB cap reached, or low-glucose guard fired)
+
+  Orange △   Dose was reduced to the per-interval maximum
+
+  Green ▼    Dose delivered normally (all safety checks passed)
+
+  A run with many red × marks is NOT a problem — it shows the
+  safety layer preventing insulin stacking exactly as designed.
+
+
+================================================================
+  DECISION LOG — PER-STEP AUDIT TRAIL
+================================================================
+
+  At the bottom of every result, expand the "Decision log" panel.
+  Each row represents one CGM interval and shows:
+
+    - CGM reading and trend direction (↑ ↓ →)
+    - Predicted glucose at +30 minutes
+    - Active insulin already on board (IOB)
+    - Correction the algorithm calculated
+    - Which safety gate fired and why (plain English reason)
+    - Amount actually delivered
+
+  Seven named safety gates:
+
+    allowed ✓           Full recommendation passed — dose given
+    no_dose             Glucose at or below target — nothing needed
+    trend confirmation  Waiting for second consecutive rising reading
+    hypo guard          Predicted to drop below safe threshold
+    iob guard           Active insulin already at the safety cap
+    max interval cap    Dose trimmed to per-interval maximum
+    SUSPENSION          Hypo protection active — full hold
+
+
+================================================================
+  BUILT-IN REFERENCE TRACES (RETROSPECTIVE REPLAY)
+================================================================
+
+  Post-prandial Spike
+    60g meal, no bolus given. Glucose rises 110 → 239 → 134 mg/dL.
+    Best trace to show the algorithm catching a hyperglycaemic event.
+
+  Nocturnal Hypo
+    Overnight with residual IOB. Glucose falls 90 → 57 → 78 mg/dL.
+    Shows the hypo guard and suspension gate in action.
+
+  Dawn Phenomenon
+    Cortisol-driven early-morning rise, no meal.
+    Glucose climbs 105 → 163 mg/dL.
+
+
+================================================================
+  EXPORT
+================================================================
+
+  After any run, scroll down to find download buttons:
+
+    - JSON report (full metrics + verdicts vs ADA/EASD targets)
+    - CSV export of the CGM trace (Retrospective mode)
+
+  The JSON report includes a "verdicts" block that records pass/fail
+  against each ADA/EASD clinical target automatically.
+
+
+================================================================
+
+  Questions or issues — contact the development team.
+
+  SWARM Bolus · simulation-first · safety-obsessed
+  Phase 4 — Clinical Evidence · Active Development
+
+================================================================
