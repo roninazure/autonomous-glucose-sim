@@ -14,6 +14,8 @@ if str(SRC_PATH) not in sys.path:
 
 import json
 
+from ags.evaluation.profile_sweep import build_sweep_export, run_profile_sweep
+from ags.evaluation.profiles import ALL_PROFILES
 from ags.evaluation.report import generate_report
 from ags.evaluation.runner import run_evaluation
 from ags.pump.state import PumpConfig
@@ -442,11 +444,25 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+    dashboard_mode = st.radio(
+        "Mode",
+        ["Comparison", "Profile Sweep"],
+        horizontal=True,
+        help="Comparison: side-by-side scenario A vs B.  "
+             "Profile Sweep: one scenario across all 4 patient archetypes.",
+    )
+
     st.header("Scenarios")
-    scenario_a_name = st.selectbox("Scenario A", options=SCENARIO_OPTIONS, index=0)
-    st.caption(SCENARIO_DESCRIPTIONS.get(scenario_a_name, ""))
-    scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
-    st.caption(SCENARIO_DESCRIPTIONS.get(scenario_b_name, ""))
+    if dashboard_mode == "Comparison":
+        scenario_a_name = st.selectbox("Scenario A", options=SCENARIO_OPTIONS, index=0)
+        st.caption(SCENARIO_DESCRIPTIONS.get(scenario_a_name, ""))
+        scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
+        st.caption(SCENARIO_DESCRIPTIONS.get(scenario_b_name, ""))
+    else:
+        sweep_scenario_name = st.selectbox("Sweep Scenario", options=SCENARIO_OPTIONS, index=0)
+        st.caption(SCENARIO_DESCRIPTIONS.get(sweep_scenario_name, ""))
+        scenario_a_name = sweep_scenario_name   # keep downstream code happy
+        scenario_b_name = sweep_scenario_name
 
     st.header("Simulation")
     duration_minutes = st.slider("Duration (minutes)", 30, 360, 180, 30)
@@ -469,7 +485,8 @@ with st.sidebar:
     pump_max_units_per_interval = st.slider("Pump max units per interval", 0.1, 3.0, 1.0, 0.05)
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
-    run_button = st.button("▶  RUN COMPARISON", type="primary")
+    _btn_label = "▶  RUN COMPARISON" if dashboard_mode == "Comparison" else "▶  RUN PROFILE SWEEP"
+    run_button = st.button(_btn_label, type="primary")
 
 # ── Results ──────────────────────────────────────────────────────────────────
 if run_button:
@@ -484,9 +501,8 @@ if run_button:
         max_units_per_interval=pump_max_units_per_interval,
     )
 
-    with st.spinner(""):
-        records_a, summary_a = run_evaluation(
-            simulation_inputs=build_scenario(scenario_a_name),
+    if dashboard_mode == "Profile Sweep":
+        _sweep_common = dict(
             safety_thresholds=safety_thresholds,
             pump_config=pump_config,
             duration_minutes=duration_minutes,
@@ -495,19 +511,174 @@ if run_button:
             min_excursion_delta_mgdl=min_excursion_delta,
             microbolus_fraction=microbolus_fraction,
         )
-        records_b, summary_b = run_evaluation(
-            simulation_inputs=build_scenario(scenario_b_name),
-            safety_thresholds=safety_thresholds,
-            pump_config=pump_config,
-            duration_minutes=duration_minutes,
-            step_minutes=step_minutes,
-            seed=42,
-            min_excursion_delta_mgdl=min_excursion_delta,
-            microbolus_fraction=microbolus_fraction,
-        )
+        with st.spinner(""):
+            sweep_results = run_profile_sweep(
+                base_scenario=build_scenario(sweep_scenario_name),
+                scenario_name=sweep_scenario_name,
+                **_sweep_common,
+            )
 
-    df_a = pd.DataFrame([r.__dict__ for r in records_a])
-    df_b = pd.DataFrame([r.__dict__ for r in records_b])
+        # ── Profile Sweep results ─────────────────────────────────────────
+        _PROFILE_COLORS = ["#39ff14", "#ff4d6d", "#ffbe0b", "#00f5ff"]
+
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                    letter-spacing:4px; text-transform:uppercase; margin-bottom:0.75rem;">
+          ── PROFILE SWEEP · {sweep_scenario_name.upper()}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Overall population pass/fail banner
+        _all_pass = all(r.report["verdicts"]["overall_pass"] for r in sweep_results)
+        _pop_color = NEON if _all_pass else RED
+        _pop_text = "◉ POPULATION PASS — all profiles meet ADA/EASD targets" \
+            if _all_pass else "⚠ POPULATION FAIL — one or more profiles outside targets"
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem;
+                    color:{_pop_color}; border:1px solid {_pop_color};
+                    padding:0.5rem 1rem; margin-bottom:1rem; letter-spacing:2px;">
+          {_pop_text}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Per-profile metric cards
+        _pcols = st.columns(4)
+        for _i, _sr in enumerate(sweep_results):
+            _pc = _PROFILE_COLORS[_i]
+            _pv = _sr.report["verdicts"]
+            _ppass = "✓ PASS" if _pv["overall_pass"] else "✗ FAIL"
+            with _pcols[_i]:
+                st.markdown(f"""
+                <div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+                            color:{_pc}; border-left:3px solid {_pc};
+                            padding-left:0.6rem; margin-bottom:0.4rem; letter-spacing:1px;">
+                  {_sr.profile.name.upper()}<br/>
+                  <span style="font-size:0.55rem; color:{MUTED};">{_sr.profile.description}</span>
+                </div>
+                """, unsafe_allow_html=True)
+                st.metric("TIR", f"{_sr.summary.percent_time_in_range:.1f}%")
+                st.metric("Peak CGM", f"{_sr.summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
+                st.metric("Avg CGM", f"{_sr.summary.average_cgm_glucose_mgdl:.0f} mg/dL")
+                st.metric("Glucose SD", f"{_sr.summary.glucose_variability_sd_mgdl:.1f}")
+                _tir_v = "✓" if _pv["tir_pass"] else "✗"
+                _pk_v = "✓" if _pv["peak_pass"] else "✗"
+                _hy_v = "✓" if _pv["hypo_pass"] else "✗"
+                _sd_v = "✓" if _pv["variability_pass"] else "✗"
+                st.markdown(f"""
+                <div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+                            color:{_pc if _pv["overall_pass"] else RED}; margin-top:0.3rem;">
+                  {_ppass} &nbsp;·&nbsp; TIR {_tir_v} &nbsp;·&nbsp; Peak {_pk_v}
+                  &nbsp;·&nbsp; Hypo {_hy_v} &nbsp;·&nbsp; SD {_sd_v}
+                </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+        # 4-trace CGM chart
+        _cgm_fig = go.Figure()
+        _cgm_fig.add_hrect(y0=70, y1=180, fillcolor="rgba(57,255,20,0.04)", line_width=0)
+        _cgm_fig.add_hline(y=70, line=dict(color=RED, width=1, dash="dot"),
+                           annotation=dict(text="HYPO 70", font=dict(color=RED, size=8), xanchor="left"))
+        _cgm_fig.add_hline(y=180, line=dict(color=AMBER, width=1, dash="dot"),
+                           annotation=dict(text="HYPER 180", font=dict(color=AMBER, size=8), xanchor="left"))
+        _cgm_fig.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
+                           annotation=dict(text="SEVERE 250", font=dict(color=RED, size=8), xanchor="left"))
+        for _i, _sr in enumerate(sweep_results):
+            _df_p = pd.DataFrame([r.__dict__ for r in _sr.records])
+            _cgm_fig.add_trace(go.Scatter(
+                x=_df_p["timestamp_min"], y=_df_p["cgm_glucose_mgdl"],
+                mode="lines", name=_sr.profile.name,
+                line=dict(color=_PROFILE_COLORS[_i], width=2),
+                hovertemplate="%{y:.1f} mg/dL<extra>" + _sr.profile.name + "</extra>",
+            ))
+        _cgm_layout = _layout(f"CGM TRAJECTORY · {sweep_scenario_name.upper()}", height=380)
+        _cgm_layout["yaxis"]["title"] = "mg/dL"
+        _cgm_layout["xaxis"]["title"] = "minutes"
+        _cgm_fig.update_layout(**_cgm_layout)
+        st.plotly_chart(_cgm_fig, width="stretch")
+
+        # Insulin delivery chart (4 bars)
+        _ins_fig = go.Figure()
+        for _i, _sr in enumerate(sweep_results):
+            _df_p = pd.DataFrame([r.__dict__ for r in _sr.records])
+            _ins_fig.add_trace(go.Bar(
+                x=_df_p["timestamp_min"], y=_df_p["pump_delivered_units"],
+                name=_sr.profile.name,
+                marker_color=_PROFILE_COLORS[_i], opacity=0.75,
+                hovertemplate="%{y:.3f} U<extra>" + _sr.profile.name + "</extra>",
+            ))
+        _ins_layout = _layout("INSULIN DELIVERY PER PROFILE", height=280)
+        _ins_layout["yaxis"]["title"] = "units"
+        _ins_layout["xaxis"]["title"] = "minutes"
+        _ins_layout["barmode"] = "group"
+        _ins_fig.update_layout(**_ins_layout)
+        st.plotly_chart(_ins_fig, width="stretch")
+
+        # Summary table
+        with st.expander("FULL METRICS TABLE", expanded=False):
+            _tbl_data = {
+                "Metric": [
+                    "Time in Range %", "Avg CGM (mg/dL)", "Peak CGM (mg/dL)",
+                    "Glucose SD (mg/dL)", "Time Below 70 (steps)", "Time Above 250 (steps)",
+                    "Delivered Insulin (U)", "Blocked Decisions", "Suspended Steps",
+                ],
+            }
+            for _sr in sweep_results:
+                _s = _sr.summary
+                _tbl_data[_sr.profile.name] = [
+                    _s.percent_time_in_range,
+                    _s.average_cgm_glucose_mgdl,
+                    _s.peak_cgm_glucose_mgdl,
+                    _s.glucose_variability_sd_mgdl,
+                    _s.time_below_range_steps,
+                    _s.time_above_250_steps,
+                    _s.total_insulin_delivered_u,
+                    _s.blocked_decisions,
+                    _s.time_suspended_steps,
+                ]
+            st.dataframe(pd.DataFrame(_tbl_data), hide_index=True, width="stretch")
+
+        # Combined export
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                    letter-spacing:4px; text-transform:uppercase; margin:1rem 0 0.5rem 0;">
+          ── SWEEP REPORT EXPORT
+        </div>
+        """, unsafe_allow_html=True)
+        _sweep_export = build_sweep_export(sweep_scenario_name, sweep_results)
+        st.download_button(
+            label="↓  EXPORT COMBINED SWEEP REPORT (JSON)",
+            data=json.dumps(_sweep_export, indent=2),
+            file_name=f"swarm_sweep_{sweep_scenario_name.lower().replace(' ', '_')}.json",
+            mime="application/json",
+        )
+        st.stop()  # Comparison code below must not run in sweep mode
+
+    else:  # Comparison mode
+        with st.spinner(""):
+            records_a, summary_a = run_evaluation(
+                simulation_inputs=build_scenario(scenario_a_name),
+                safety_thresholds=safety_thresholds,
+                pump_config=pump_config,
+                duration_minutes=duration_minutes,
+                step_minutes=step_minutes,
+                seed=42,
+                min_excursion_delta_mgdl=min_excursion_delta,
+                microbolus_fraction=microbolus_fraction,
+            )
+            records_b, summary_b = run_evaluation(
+                simulation_inputs=build_scenario(scenario_b_name),
+                safety_thresholds=safety_thresholds,
+                pump_config=pump_config,
+                duration_minutes=duration_minutes,
+                step_minutes=step_minutes,
+                seed=42,
+                min_excursion_delta_mgdl=min_excursion_delta,
+                microbolus_fraction=microbolus_fraction,
+            )
+
+        df_a = pd.DataFrame([r.__dict__ for r in records_a])
+        df_b = pd.DataFrame([r.__dict__ for r in records_b])
 
     # ── Scenario metric panels ────────────────────────────────────────────
     st.markdown(f"""
