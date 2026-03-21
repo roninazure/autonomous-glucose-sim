@@ -84,7 +84,7 @@ def run_evaluation(
             autonomous_isf=autonomous_isf,
         )
 
-        signal, prediction, recommendation = run_controller(controller_inputs)
+        signal, prediction, recommendation, meal_signal = run_controller(controller_inputs)
 
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
@@ -158,6 +158,10 @@ def run_evaluation(
                 is_suspended=suspend_state.is_suspended,
                 dual_wave_extended_units=extended_delivered,
                 rate_mgdl_per_min=signal.rate_mgdl_per_min,
+                meal_detected=meal_signal.detected if meal_signal else False,
+                meal_phase=meal_signal.phase.value if meal_signal else "none",
+                meal_estimated_carbs_g=meal_signal.estimated_carbs_g if meal_signal else 0.0,
+                meal_confidence=meal_signal.confidence if meal_signal else 0.0,
             )
         )
 

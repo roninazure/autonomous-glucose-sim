@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ags.detection.state import MealSignal
+
 
 @dataclass
 class ControllerInputs:
@@ -46,6 +48,10 @@ class ControllerInputs:
     # refine the autonomous estimate as the session accumulates evidence.
     # Oldest observations are dropped once the window exceeds 12 entries.
     isf_observations: list[tuple[float, float]] = field(default_factory=list)
+    # Autonomous meal signal — populated by the runner when autonomous_isf=True.
+    # The recommender uses this to fire a pre-bolus on ONSET and to scale the
+    # correction dose appropriately throughout the post-prandial window.
+    meal_signal: MealSignal | None = None
 
 
 @dataclass

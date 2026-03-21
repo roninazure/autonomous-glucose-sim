@@ -253,6 +253,43 @@ def _layout(title: str = "", height: int = 320) -> dict:
 
 
 # ── Chart builders ───────────────────────────────────────────────────────────
+def _add_meal_detection_annotations(fig: go.Figure, df: pd.DataFrame, color: str) -> None:
+    """Overlay autonomous meal detection events on a CGM chart.
+
+    Draws a vertical shaded band at each ONSET window and a small marker
+    indicating the first detection, so the user can see exactly when the
+    self-driving pancreas 'noticed' the meal — without being told about it.
+    """
+    if "meal_detected" not in df.columns:
+        return
+
+    onset_rows = df[df["meal_phase"] == "onset"]
+    if onset_rows.empty:
+        return
+
+    # Group consecutive ONSET steps into single bands
+    in_band = False
+    band_start = None
+    for _, row in df.iterrows():
+        if row["meal_phase"] == "onset" and not in_band:
+            band_start = row["timestamp_min"]
+            in_band = True
+        elif row["meal_phase"] != "onset" and in_band:
+            fig.add_vrect(
+                x0=band_start, x1=row["timestamp_min"],
+                fillcolor=color, opacity=0.10, line_width=0,
+                annotation_text="meal detected",
+                annotation_position="top left",
+                annotation_font=dict(size=8, color=color),
+            )
+            in_band = False
+    if in_band and band_start is not None:
+        fig.add_vrect(
+            x0=band_start, x1=df["timestamp_min"].iloc[-1],
+            fillcolor=color, opacity=0.10, line_width=0,
+        )
+
+
 def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) -> go.Figure:
     fig = go.Figure()
 
@@ -268,6 +305,11 @@ def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
                   annotation=dict(text="High  180", font=dict(color=AMBER, size=9, family="Inter"), xanchor="left"))
     fig.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
                   annotation=dict(text="Very High  250", font=dict(color=RED, size=9, family="Inter"), xanchor="left"))
+
+    # Autonomous meal detection bands — shaded regions where the system
+    # inferred a meal without being told
+    _add_meal_detection_annotations(fig, df_a, NEON)
+    _add_meal_detection_annotations(fig, df_b, CYAN)
 
     fig.add_trace(go.Scatter(
         x=df_a["timestamp_min"], y=df_a["cgm_glucose_mgdl"],

@@ -85,11 +85,56 @@ def _ror_to_microbolus_fraction(rate_mgdl_per_min: float) -> float:
         return 1.0
 
 
+def _prebolus_units(estimated_carbs_g: float, effective_isf: float) -> float:
+    """Size a pre-bolus from meal onset carb estimate.
+
+    The pre-bolus covers the *leading edge* of the meal — roughly 40% of the
+    estimated carb load, expressed in insulin units.  The remaining 60% is
+    handled by the adaptive micro-bolus loop as glucose continues to rise.
+
+    Conservative by design: it is safer to under-dose and correct than to
+    stack insulin on an estimate that turns out to be wrong.
+
+    Formula:
+        carb_impact ≈ estimated_carbs_g × 4 mg/dL per g (rough physiology)
+        pre_dose = (carb_impact × 0.40) / effective_isf
+    """
+    carb_impact_mgdl = estimated_carbs_g * 4.0
+    return max(0.0, (carb_impact_mgdl * 0.40) / effective_isf)
+
+
 def recommend_correction(
     inputs: ControllerInputs,
     prediction: GlucosePrediction,
     signal: ExcursionSignal | None = None,
 ) -> CorrectionRecommendation:
+    # ── Autonomous pre-bolus on meal ONSET ───────────────────────────────────
+    # If the meal detector has flagged ONSET, fire a pre-bolus immediately —
+    # before the glucose excursion shows up in the prediction horizon.  This
+    # mirrors the biological pancreas's first-phase insulin response: rapid
+    # secretion triggered by the earliest glucose rise signal.
+    meal = inputs.meal_signal
+    if (
+        inputs.autonomous_isf
+        and meal is not None
+        and meal.recommend_prebolus
+        and meal.estimated_carbs_g > 0
+    ):
+        base_isf, isf_label = _isf_from_ror(
+            signal.rate_mgdl_per_min if signal is not None else meal.smoothed_rate_mgdl_per_min
+        )
+        effective_isf = _refine_isf_from_observations(base_isf, inputs.isf_observations)
+        pre_units = _prebolus_units(meal.estimated_carbs_g, effective_isf)
+        return CorrectionRecommendation(
+            recommended_units=pre_units,
+            reason=(
+                f"autonomous pre-bolus: meal ONSET detected | "
+                f"~{meal.estimated_carbs_g:.0f}g estimated | "
+                f"confidence {meal.confidence:.0%} | "
+                f"ISF {effective_isf:.0f} [{isf_label}]"
+            ),
+        )
+
     excursion_above_target = prediction.predicted_glucose_mgdl - inputs.target_glucose_mgdl
 
     if excursion_above_target <= 0:

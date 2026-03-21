@@ -13,7 +13,7 @@ def main() -> None:
         correction_factor_mgdl_per_unit=50.0,
     )
 
-    signal, prediction, recommendation = run_controller(inputs)
+    signal, prediction, recommendation, _meal_signal = run_controller(inputs)
 
     print("Controller demo")
     print("=" * 20)
