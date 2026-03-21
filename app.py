@@ -19,6 +19,9 @@ from ags.evaluation.profiles import ALL_PROFILES
 from ags.evaluation.report import generate_report
 from ags.evaluation.runner import run_evaluation
 from ags.pump.state import PumpConfig
+from ags.retrospective.loader import CgmParseError, parse_cgm_text, readings_to_csv
+from ags.retrospective.reference_traces import REFERENCE_TRACE_DESCRIPTIONS, REFERENCE_TRACES
+from ags.retrospective.runner import RetrospectiveConfig, run_retrospective
 from ags.safety.state import SafetyThresholds
 from ags.simulation.scenarios import (
     baseline_meal_scenario,
@@ -446,10 +449,11 @@ with st.sidebar:
 
     dashboard_mode = st.radio(
         "Mode",
-        ["Comparison", "Profile Sweep"],
-        horizontal=True,
+        ["Comparison", "Profile Sweep", "Retrospective Replay"],
+        horizontal=False,
         help="Comparison: side-by-side scenario A vs B.  "
-             "Profile Sweep: one scenario across all 4 patient archetypes.",
+             "Profile Sweep: one scenario across all 4 patient archetypes.  "
+             "Retrospective Replay: run controller against a real CGM trace.",
     )
 
     st.header("Scenarios")
@@ -458,11 +462,51 @@ with st.sidebar:
         st.caption(SCENARIO_DESCRIPTIONS.get(scenario_a_name, ""))
         scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
         st.caption(SCENARIO_DESCRIPTIONS.get(scenario_b_name, ""))
-    else:
+    elif dashboard_mode == "Profile Sweep":
         sweep_scenario_name = st.selectbox("Sweep Scenario", options=SCENARIO_OPTIONS, index=0)
         st.caption(SCENARIO_DESCRIPTIONS.get(sweep_scenario_name, ""))
         scenario_a_name = sweep_scenario_name   # keep downstream code happy
         scenario_b_name = sweep_scenario_name
+    else:  # Retrospective Replay
+        retro_source = st.radio("CGM Source", ["Reference trace", "Upload CSV", "Paste CSV"])
+        retro_trace_name: str | None = None
+        retro_uploaded_text: str | None = None
+
+        if retro_source == "Reference trace":
+            retro_trace_name = st.selectbox(
+                "Select trace",
+                options=list(REFERENCE_TRACES.keys()),
+            )
+            st.caption(REFERENCE_TRACE_DESCRIPTIONS.get(retro_trace_name, ""))
+        elif retro_source == "Upload CSV":
+            retro_file = st.file_uploader(
+                "Upload CGM CSV",
+                type=["csv", "txt"],
+                help="Simple: timestamp_min,glucose_mgdl  or  Dexcom G6/G7 Clarity export.",
+            )
+            if retro_file is not None:
+                retro_uploaded_text = retro_file.read().decode("utf-8", errors="replace")
+        else:  # Paste CSV
+            retro_uploaded_text = st.text_area(
+                "Paste CGM data (timestamp_min,glucose_mgdl)",
+                placeholder="timestamp_min,glucose_mgdl\n0,110\n5,115\n10,121\n...",
+                height=160,
+            )
+
+        st.header("Controller (Retro)")
+        retro_isf = st.slider(
+            "Correction factor (ISF, mg/dL/U)",
+            20.0, 120.0, 50.0, 1.0,
+            help="Estimated insulin sensitivity for this patient.",
+        )
+        retro_peak = st.selectbox(
+            "Insulin peak time (min)",
+            [55, 65, 75],
+            index=2,
+            help="55 = Fiasp, 65 = Humalog, 75 = NovoLog",
+        )
+        scenario_a_name = retro_trace_name or "Custom trace"
+        scenario_b_name = scenario_a_name
 
     st.header("Simulation")
     duration_minutes = st.slider("Duration (minutes)", 30, 360, 180, 30)
@@ -501,7 +545,192 @@ if run_button:
         max_units_per_interval=pump_max_units_per_interval,
     )
 
-    if dashboard_mode == "Profile Sweep":
+    if dashboard_mode == "Retrospective Replay":
+        # ── Load readings ──────────────────────────────────────────────────
+        try:
+            if retro_source == "Reference trace" and retro_trace_name:
+                retro_readings = list(REFERENCE_TRACES[retro_trace_name])
+                _trace_label = retro_trace_name
+            elif retro_uploaded_text and retro_uploaded_text.strip():
+                retro_readings = parse_cgm_text(retro_uploaded_text)
+                _trace_label = "Custom trace"
+            else:
+                st.error("No CGM data provided. Select a reference trace or upload/paste a CSV.")
+                st.stop()
+        except CgmParseError as exc:
+            st.error(f"CGM parse error: {exc}")
+            st.stop()
+
+        retro_cfg = RetrospectiveConfig(
+            target_glucose_mgdl=110.0,
+            correction_factor_mgdl_per_unit=retro_isf,
+            min_excursion_delta_mgdl=min_excursion_delta,
+            microbolus_fraction=microbolus_fraction,
+            insulin_peak_minutes=float(retro_peak),
+        )
+        with st.spinner(""):
+            retro_records, retro_summary = run_retrospective(
+                readings=retro_readings,
+                config=retro_cfg,
+                safety_thresholds=safety_thresholds,
+                pump_config=pump_config,
+            )
+
+        retro_df = pd.DataFrame([r.__dict__ for r in retro_records])
+        _duration_min = retro_readings[-1].timestamp_min
+        _step_min = retro_readings[1].timestamp_min - retro_readings[0].timestamp_min
+
+        # ── Header ─────────────────────────────────────────────────────────
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                    letter-spacing:4px; text-transform:uppercase; margin-bottom:0.75rem;">
+          ── RETROSPECTIVE REPLAY · {_trace_label.upper()}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ── Metric row ─────────────────────────────────────────────────────
+        rc1, rc2, rc3, rc4, rc5, rc6 = st.columns(6)
+        rc1.metric("Time in Range", f"{retro_summary.percent_time_in_range:.1f}%")
+        rc2.metric("Avg CGM", f"{retro_summary.average_cgm_glucose_mgdl:.0f} mg/dL")
+        rc3.metric("Peak CGM", f"{retro_summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
+        rc4.metric("Delivered U", f"{retro_summary.total_insulin_delivered_u:.2f}")
+        rc5.metric("Blocked", retro_summary.blocked_decisions)
+        rc6.metric("Suspended", retro_summary.time_suspended_steps)
+
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+        # ── CGM trace + intervention markers ──────────────────────────────
+        _rCGM = go.Figure()
+        _rCGM.add_hrect(y0=70, y1=180, fillcolor="rgba(57,255,20,0.04)", line_width=0)
+        _rCGM.add_hline(y=70, line=dict(color=RED, width=1, dash="dot"),
+                        annotation=dict(text="HYPO 70", font=dict(color=RED, size=8), xanchor="left"))
+        _rCGM.add_hline(y=180, line=dict(color=AMBER, width=1, dash="dot"),
+                        annotation=dict(text="HYPER 180", font=dict(color=AMBER, size=8), xanchor="left"))
+        _rCGM.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
+                        annotation=dict(text="SEVERE 250", font=dict(color=RED, size=8), xanchor="left"))
+        _rCGM.add_trace(go.Scatter(
+            x=retro_df["timestamp_min"], y=retro_df["cgm_glucose_mgdl"],
+            mode="lines+markers", name="CGM Trace",
+            line=dict(color=NEON, width=2.5),
+            marker=dict(size=5, color=NEON),
+            hovertemplate="%{y:.1f} mg/dL<extra>CGM</extra>",
+        ))
+        # Dosing decisions as vertical annotations via scatter
+        _dose_df = retro_df[retro_df["pump_delivered_units"] > 0]
+        if not _dose_df.empty:
+            _rCGM.add_trace(go.Scatter(
+                x=_dose_df["timestamp_min"],
+                y=_dose_df["cgm_glucose_mgdl"],
+                mode="markers", name="Controller Dose",
+                marker=dict(
+                    symbol="triangle-down", size=14,
+                    color=CYAN, line=dict(width=1.5, color=CYAN),
+                ),
+                hovertemplate="t=%{x} min · dose at %{y:.1f} mg/dL<extra>Dose</extra>",
+            ))
+        _blocked_df = retro_df[retro_df["safety_status"] == "blocked"]
+        if not _blocked_df.empty:
+            _rCGM.add_trace(go.Scatter(
+                x=_blocked_df["timestamp_min"],
+                y=_blocked_df["cgm_glucose_mgdl"],
+                mode="markers", name="Blocked",
+                marker=dict(symbol="x", size=10, color=RED, line=dict(width=2, color=RED)),
+                hovertemplate="t=%{x} min — BLOCKED at %{y:.1f} mg/dL<extra>Blocked</extra>",
+            ))
+        _rCGM_layout = _layout(f"CGM TRACE · CONTROLLER DECISIONS", height=400)
+        _rCGM_layout["yaxis"]["title"] = "mg/dL"
+        _rCGM_layout["xaxis"]["title"] = "minutes"
+        _rCGM.update_layout(**_rCGM_layout)
+        st.plotly_chart(_rCGM, width="stretch")
+
+        # ── Insulin recommendation vs delivery ────────────────────────────
+        _rc1, _rc2 = st.columns([3, 2])
+        with _rc1:
+            _rIns = go.Figure()
+            _rIns.add_trace(go.Bar(
+                x=retro_df["timestamp_min"], y=retro_df["pump_delivered_units"],
+                name="Delivered", marker_color=NEON, opacity=0.9,
+                hovertemplate="%{y:.3f} U<extra>Delivered</extra>",
+            ))
+            _rIns.add_trace(go.Scatter(
+                x=retro_df["timestamp_min"], y=retro_df["recommended_units"],
+                mode="lines", name="Recommended",
+                line=dict(color=NEON_DIM, width=1.5, dash="dot"),
+                hovertemplate="%{y:.3f} U<extra>Recommended</extra>",
+            ))
+            _rIns_layout = _layout("HYPOTHETICAL INSULIN DELIVERY", height=280)
+            _rIns_layout["yaxis"]["title"] = "units"
+            _rIns_layout["xaxis"]["title"] = "minutes"
+            _rIns_layout["barmode"] = "overlay"
+            _rIns.update_layout(**_rIns_layout)
+            st.plotly_chart(_rIns, width="stretch")
+        with _rc2:
+            _rIOB = go.Figure()
+            _rIOB.add_trace(go.Scatter(
+                x=retro_df["timestamp_min"], y=retro_df["insulin_on_board_u"],
+                mode="lines", name="IOB",
+                line=dict(color=CYAN, width=2),
+                fill="tozeroy", fillcolor="rgba(0,245,255,0.07)",
+                hovertemplate="%{y:.3f} U<extra>IOB</extra>",
+            ))
+            _rIOB_layout = _layout("HYPOTHETICAL IOB", height=280)
+            _rIOB_layout["yaxis"]["title"] = "IOB (U)"
+            _rIOB_layout["xaxis"]["title"] = "minutes"
+            _rIOB.update_layout(**_rIOB_layout)
+            st.plotly_chart(_rIOB, width="stretch")
+
+        # ── Report + export ────────────────────────────────────────────────
+        _retro_report = generate_report(
+            scenario_name=_trace_label,
+            summary=retro_summary,
+            duration_minutes=_duration_min,
+            step_minutes=int(_step_min),
+            safety_thresholds=safety_thresholds,
+            pump_config=pump_config,
+            correction_factor_mgdl_per_unit=retro_isf,
+            min_excursion_delta_mgdl=min_excursion_delta,
+            microbolus_fraction=microbolus_fraction,
+        )
+        _retro_report["retrospective"] = True
+        _retro_report["trace_points"] = len(retro_readings)
+        _retro_report["insulin_peak_minutes"] = float(retro_peak)
+
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                    letter-spacing:4px; text-transform:uppercase; margin:1rem 0 0.5rem 0;">
+          ── RETROSPECTIVE REPORT EXPORT
+        </div>
+        """, unsafe_allow_html=True)
+        _rpass = _retro_report["verdicts"]["overall_pass"]
+        _rcolor = NEON if _rpass else RED
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+                    color:{_rcolor}; margin-bottom:0.5rem;">
+          {"✓ PASS" if _rpass else "✗ FAIL"} &nbsp;·&nbsp;
+          TIR {"✓" if _retro_report["verdicts"]["tir_pass"] else "✗"} &nbsp;·&nbsp;
+          Peak {"✓" if _retro_report["verdicts"]["peak_pass"] else "✗"} &nbsp;·&nbsp;
+          Hypo {"✓" if _retro_report["verdicts"]["hypo_pass"] else "✗"} &nbsp;·&nbsp;
+          SD {"✓" if _retro_report["verdicts"]["variability_pass"] else "✗"}
+        </div>
+        """, unsafe_allow_html=True)
+        _rex1, _rex2 = st.columns(2)
+        with _rex1:
+            st.download_button(
+                label="↓  EXPORT RETROSPECTIVE REPORT (JSON)",
+                data=json.dumps(_retro_report, indent=2),
+                file_name=f"swarm_retro_{_trace_label.lower()[:30].replace(' ', '_')}.json",
+                mime="application/json",
+            )
+        with _rex2:
+            st.download_button(
+                label="↓  EXPORT TRACE AS CSV",
+                data=readings_to_csv(retro_readings),
+                file_name=f"cgm_trace_{_trace_label.lower()[:30].replace(' ', '_')}.csv",
+                mime="text/csv",
+            )
+        st.stop()
+
+    elif dashboard_mode == "Profile Sweep":
         _sweep_common = dict(
             safety_thresholds=safety_thresholds,
             pump_config=pump_config,
