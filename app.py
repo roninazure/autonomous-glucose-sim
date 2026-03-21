@@ -12,6 +12,9 @@ SRC_PATH = REPO_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
+import json
+
+from ags.evaluation.report import generate_report
 from ags.evaluation.runner import run_evaluation
 from ags.pump.state import PumpConfig
 from ags.safety.state import SafetyThresholds
@@ -536,11 +539,12 @@ if run_button:
         r2.metric("Avg CGM", f"{summary_a.average_cgm_glucose_mgdl:.0f}")
         r3.metric("Peak CGM", f"{summary_a.peak_cgm_glucose_mgdl:.0f}")
         r4.metric("Above 250", f"{summary_a.time_above_250_steps} steps")
-        r5, r6, r7, r8 = st.columns(4)
+        r5, r6, r7, r8, r9 = st.columns(5)
         r5.metric("Recommended U", f"{summary_a.total_recommended_insulin_u:.2f}")
         r6.metric("Delivered U", f"{summary_a.total_insulin_delivered_u:.2f}")
         r7.metric("Blocked", summary_a.blocked_decisions)
         r8.metric("Clipped", summary_a.clipped_decisions)
+        r9.metric("Suspended", summary_a.time_suspended_steps)
 
     with col_b:
         st.markdown(f"""
@@ -555,11 +559,12 @@ if run_button:
         r2.metric("Avg CGM", f"{summary_b.average_cgm_glucose_mgdl:.0f}")
         r3.metric("Peak CGM", f"{summary_b.peak_cgm_glucose_mgdl:.0f}")
         r4.metric("Above 250", f"{summary_b.time_above_250_steps} steps")
-        r5, r6, r7, r8 = st.columns(4)
+        r5, r6, r7, r8, r9 = st.columns(5)
         r5.metric("Recommended U", f"{summary_b.total_recommended_insulin_u:.2f}")
         r6.metric("Delivered U", f"{summary_b.total_insulin_delivered_u:.2f}")
         r7.metric("Blocked", summary_b.blocked_decisions)
         r8.metric("Clipped", summary_b.clipped_decisions)
+        r9.metric("Suspended", summary_b.time_suspended_steps)
 
     st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
@@ -682,7 +687,76 @@ if run_button:
     if not verdict_lines:
         verdict_lines.append("[INFO]  Both scenarios behave similarly under current constraints.")
 
+    # Pre-build reports so download buttons are always available after a run
+    _report_a = generate_report(
+        scenario_name=scenario_a_name,
+        summary=summary_a,
+        duration_minutes=duration_minutes,
+        step_minutes=step_minutes,
+        safety_thresholds=safety_thresholds,
+        pump_config=pump_config,
+        min_excursion_delta_mgdl=min_excursion_delta,
+        microbolus_fraction=microbolus_fraction,
+    )
+    _report_b = generate_report(
+        scenario_name=scenario_b_name,
+        summary=summary_b,
+        duration_minutes=duration_minutes,
+        step_minutes=step_minutes,
+        safety_thresholds=safety_thresholds,
+        pump_config=pump_config,
+        min_excursion_delta_mgdl=min_excursion_delta,
+        microbolus_fraction=microbolus_fraction,
+    )
+
     verdict_text = "\n".join(f"  {line}" for line in verdict_lines)
+
+    # ── Export ────────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                letter-spacing:4px; text-transform:uppercase; margin:1.5rem 0 0.5rem 0;">
+      ── VALIDATION REPORT EXPORT
+    </div>
+    """, unsafe_allow_html=True)
+    _exp_a, _exp_b = st.columns(2)
+    with _exp_a:
+        _pass_a = "✓ PASS" if _report_a["verdicts"]["overall_pass"] else "✗ FAIL"
+        _color_a = NEON if _report_a["verdicts"]["overall_pass"] else RED
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+                    color:{_color_a}; margin-bottom:0.4rem;">
+          Scenario A · {_pass_a}
+          &nbsp;·&nbsp; TIR {"✓" if _report_a["verdicts"]["tir_pass"] else "✗"}
+          &nbsp;·&nbsp; Peak {"✓" if _report_a["verdicts"]["peak_pass"] else "✗"}
+          &nbsp;·&nbsp; Hypo {"✓" if _report_a["verdicts"]["hypo_pass"] else "✗"}
+          &nbsp;·&nbsp; SD {"✓" if _report_a["verdicts"]["variability_pass"] else "✗"}
+        </div>
+        """, unsafe_allow_html=True)
+        st.download_button(
+            label="↓  EXPORT SCENARIO A REPORT",
+            data=json.dumps(_report_a, indent=2),
+            file_name=f"swarm_report_A_{scenario_a_name.lower().replace(' ', '_')}.json",
+            mime="application/json",
+        )
+    with _exp_b:
+        _pass_b = "✓ PASS" if _report_b["verdicts"]["overall_pass"] else "✗ FAIL"
+        _color_b = NEON if _report_b["verdicts"]["overall_pass"] else RED
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+                    color:{_color_b}; margin-bottom:0.4rem;">
+          Scenario B · {_pass_b}
+          &nbsp;·&nbsp; TIR {"✓" if _report_b["verdicts"]["tir_pass"] else "✗"}
+          &nbsp;·&nbsp; Peak {"✓" if _report_b["verdicts"]["peak_pass"] else "✗"}
+          &nbsp;·&nbsp; Hypo {"✓" if _report_b["verdicts"]["hypo_pass"] else "✗"}
+          &nbsp;·&nbsp; SD {"✓" if _report_b["verdicts"]["variability_pass"] else "✗"}
+        </div>
+        """, unsafe_allow_html=True)
+        st.download_button(
+            label="↓  EXPORT SCENARIO B REPORT",
+            data=json.dumps(_report_b, indent=2),
+            file_name=f"swarm_report_B_{scenario_b_name.lower().replace(' ', '_')}.json",
+            mime="application/json",
+        )
 
     st.markdown(f"""
     <div style="margin-top:1rem;">

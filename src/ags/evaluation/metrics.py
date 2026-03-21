@@ -42,6 +42,7 @@ def summarize_run(records: list[TimestepRecord]) -> RunSummary:
     blocked_decisions = sum(1 for r in records if r.safety_status == "blocked")
     clipped_decisions = sum(1 for r in records if r.safety_status == "clipped")
     allowed_decisions = sum(1 for r in records if r.safety_status == "allowed")
+    time_suspended_steps = sum(1 for r in records if r.is_suspended)
 
     return RunSummary(
         total_timesteps=total_timesteps,
@@ -58,4 +59,5 @@ def summarize_run(records: list[TimestepRecord]) -> RunSummary:
         blocked_decisions=blocked_decisions,
         clipped_decisions=clipped_decisions,
         allowed_decisions=allowed_decisions,
+        time_suspended_steps=time_suspended_steps,
     )

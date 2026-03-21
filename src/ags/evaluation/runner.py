@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from ags.controller.pipeline import run_controller
 from ags.controller.state import ControllerInputs
 from ags.evaluation.metrics import summarize_run
 from ags.evaluation.state import RunSummary, TimestepRecord
 from ags.pump.pipeline import run_pump_with_safety_output
 from ags.pump.state import PumpConfig
-from ags.safety.pipeline import run_controller_with_safety
-from ags.safety.state import SafetyThresholds
+from ags.safety.evaluator import evaluate_safety_stateful
+from ags.safety.integration import build_safety_inputs
+from ags.safety.state import SafetyThresholds, SuspendState
 from ags.simulation.engine import run_simulation
 from ags.simulation.insulin import advance_insulin_compartments, insulin_on_board
 from ags.simulation.state import SimulationInputs
@@ -47,6 +49,10 @@ def run_evaluation(
     _HISTORY_WINDOW = 5
     cgm_history: list[float] = [snapshots[0].cgm_glucose_mgdl]
 
+    # Stateful hypo suspension — persists across timesteps until glucose
+    # recovers above the resume threshold.
+    suspend_state = SuspendState()
+
     for previous, current in zip(snapshots[:-1], snapshots[1:]):
         # Capture IOB before this step's delivery so the chart shows what the
         # controller and safety layer actually saw when making their decision.
@@ -67,9 +73,19 @@ def run_evaluation(
             microbolus_fraction=microbolus_fraction,
         )
 
-        _, _, recommendation, safety_decision = run_controller_with_safety(
-            controller_inputs=controller_inputs,
-            safety_thresholds=safety_thresholds,
+        signal, prediction, recommendation = run_controller(controller_inputs)
+
+        safety_inputs = build_safety_inputs(
+            recommendation=recommendation,
+            prediction=prediction,
+            signal=signal,
+            insulin_on_board_u=step_iob_u,
+        )
+
+        safety_decision, suspend_state = evaluate_safety_stateful(
+            inputs=safety_inputs,
+            thresholds=safety_thresholds,
+            suspend_state=suspend_state,
         )
 
         pump_result = run_pump_with_safety_output(
@@ -97,6 +113,7 @@ def run_evaluation(
                 safety_final_units=safety_decision.final_units,
                 pump_delivered_units=pump_result.delivered_units,
                 insulin_on_board_u=step_iob_u,
+                is_suspended=suspend_state.is_suspended,
             )
         )
 

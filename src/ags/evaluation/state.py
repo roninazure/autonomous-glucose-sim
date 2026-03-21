@@ -13,6 +13,7 @@ class TimestepRecord:
     safety_final_units: float
     pump_delivered_units: float
     insulin_on_board_u: float = 0.0
+    is_suspended: bool = False
 
 
 @dataclass
@@ -31,3 +32,4 @@ class RunSummary:
     blocked_decisions: int
     clipped_decisions: int
     allowed_decisions: int
+    time_suspended_steps: int = 0
