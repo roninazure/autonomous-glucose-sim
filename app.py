@@ -540,6 +540,97 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# ── Algorithm Innovations panel ──────────────────────────────────────────────
+with st.expander("▶  ALGORITHM INNOVATIONS", expanded=False):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown(f"""
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{CYAN};
+            letter-spacing:3px; text-transform:uppercase; margin-bottom:0.5rem;">
+  01 · 1-MINUTE CGM LOOP
+</div>
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:{WHITE};
+            line-height:1.8; margin-bottom:1rem;">
+  Supports <span style="color:{NEON};">1-minute timesteps</span> — matching the
+  FreeStyle Libre's native 60 s sampling rate.<br/>
+  All detection thresholds are in <span style="color:{NEON};">mg/dL/min</span>
+  (not per-step counts), so behaviour is identical at 1-min or 5-min cadence.<br/>
+  <span style="color:{MUTED};">Sidebar → Simulation → Timestep = 1 min</span>
+</div>
+
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{CYAN};
+            letter-spacing:3px; text-transform:uppercase; margin-bottom:0.5rem;">
+  02 · DUAL-WAVE (SPLIT) BOLUS
+</div>
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:{WHITE};
+            line-height:1.8; margin-bottom:0.5rem;">
+  Mimics a <span style="color:{NEON};">combo/dual-wave bolus</span> as used
+  on clinical pumps today. Each correction is split into:<br/>
+  &nbsp;&nbsp;<span style="color:{NEON};">Immediate portion</span> — delivered
+  now (hits the initial spike in 5–10 min)<br/>
+  &nbsp;&nbsp;<span style="color:{NEON};">Extended tail</span> — dripped evenly
+  over a configurable window (default 20 min)
+</div>
+<div style="background:{BG3}; border-left:2px solid {CYAN}; padding:0.5rem 0.75rem;
+            font-family:'Share Tech Mono',monospace; font-size:0.68rem;
+            color:{MUTED}; margin-bottom:0.5rem;">
+  Doctor's example: 30g carbs → 6U total → 2U quick + 4U slowly over 20 min
+</div>
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:{MUTED};">
+  Sidebar → Dual-Wave Bolus → Enable, then set immediate fraction &amp; duration
+</div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{CYAN};
+            letter-spacing:3px; text-transform:uppercase; margin-bottom:0.5rem;">
+  03 · RATE-OF-RISE TIERED MICRO-BOLUS
+</div>
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:{WHITE};
+            line-height:1.8; margin-bottom:0.5rem;">
+  Controller scales its micro-bolus fraction
+  <span style="color:{NEON};">dynamically</span> from the observed rate of
+  rise — rather than a fixed fraction.
+</div>
+<div style="background:{BG3}; border:1px solid {NEON_DIM}; border-radius:2px;
+            padding:0.5rem 0.75rem; font-family:'Share Tech Mono',monospace;
+            font-size:0.68rem; color:{WHITE}; line-height:2; margin-bottom:0.5rem;">
+  <span style="color:{MUTED};">&lt; 1.0 mg/dL/min</span>  →  <span style="color:#888;">0% &nbsp;(flat / noise)</span><br/>
+  <span style="color:{MUTED};">1–2 &nbsp;mg/dL/min</span>  →  <span style="color:{AMBER};">25% &nbsp;of full correction</span><br/>
+  <span style="color:{MUTED};">2–3 &nbsp;mg/dL/min</span>  →  <span style="color:{AMBER};">50%</span><br/>
+  <span style="color:{MUTED};">≥ 3.0 mg/dL/min</span>  →  <span style="color:{NEON};">100% &nbsp;(aggressive spike)</span>
+</div>
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+            color:{MUTED}; margin-bottom:1rem;">
+  Sidebar → Controller → RoR-tiered micro-bolus
+</div>
+
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{CYAN};
+            letter-spacing:3px; text-transform:uppercase; margin-bottom:0.5rem;">
+  04 · WEIGHT-BASED ISF (1700 RULE)
+</div>
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:{WHITE};
+            line-height:1.8; margin-bottom:0.5rem;">
+  ISF estimated automatically from body weight:
+</div>
+<div style="background:{BG3}; border-left:2px solid {NEON}; padding:0.5rem 0.75rem;
+            font-family:'Share Tech Mono',monospace; font-size:0.68rem;
+            color:{NEON}; margin-bottom:0.5rem;">
+  ISF ≈ 1700 ÷ TDD &nbsp;&nbsp; where &nbsp;&nbsp; TDD ≈ weight_kg × 0.55
+</div>
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.68rem;
+            color:{WHITE}; line-height:1.7; margin-bottom:0.5rem;">
+  70 kg patient → TDD ≈ 38.5 U/day → ISF ≈ 44 mg/dL/U<br/>
+  ICR also estimated via the <span style="color:{NEON};">500 Rule</span>
+  (g carbs per unit).
+</div>
+<div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:{MUTED};">
+  Sidebar → Patient → Estimate ISF from weight
+</div>
+        """, unsafe_allow_html=True)
+
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 SCENARIO_OPTIONS = [
     "Baseline Meal",
