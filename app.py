@@ -15,7 +15,13 @@ if str(SRC_PATH) not in sys.path:
 from ags.evaluation.runner import run_evaluation
 from ags.pump.state import PumpConfig
 from ags.safety.state import SafetyThresholds
-from ags.simulation.scenarios import baseline_meal_scenario
+from ags.simulation.scenarios import (
+    baseline_meal_scenario,
+    dawn_phenomenon_scenario,
+    exercise_hypoglycemia_scenario,
+    late_correction_scenario,
+    missed_bolus_scenario,
+)
 from ags.simulation.state import MealEvent, SimulationInputs
 
 # ── Palette ─────────────────────────────────────────────────────────────────
@@ -337,6 +343,18 @@ def safety_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: st
     return fig
 
 
+# ── Scenario metadata ────────────────────────────────────────────────────────
+SCENARIO_DESCRIPTIONS = {
+    "Baseline Meal":        "45g carbs · standard ISF · controller proves baseline TIR",
+    "Fasting Baseline":     "No meal · flat drift · tests controller restraint (zero bolus pressure)",
+    "Large Meal Spike":     "90g carbs · steep post-prandial climb · stress-tests dosing cap",
+    "Dawn Phenomenon":      "No meal · cortisol-driven drift · slow rise the controller must catch",
+    "Exercise Hypoglycemia":"Negative drift · high ISF · safety layer must block compounding drops",
+    "Missed Bolus":         "75g meal · no pre-bolus · tests retroactive correction recovery",
+    "Late Correction":      "60g meal + snack · delayed insulin · timing mismatch risk",
+}
+
+
 # ── Scenario builder ─────────────────────────────────────────────────────────
 def build_scenario(name: str) -> SimulationInputs:
     if name == "Baseline Meal":
@@ -357,6 +375,14 @@ def build_scenario(name: str) -> SimulationInputs:
                 MealEvent(timestamp_min=30, carbs_g=90.0, absorption_minutes=150),
             ],
         )
+    if name == "Dawn Phenomenon":
+        return dawn_phenomenon_scenario()
+    if name == "Exercise Hypoglycemia":
+        return exercise_hypoglycemia_scenario()
+    if name == "Missed Bolus":
+        return missed_bolus_scenario()
+    if name == "Late Correction":
+        return late_correction_scenario()
     return baseline_meal_scenario()
 
 
@@ -393,7 +419,15 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
-SCENARIO_OPTIONS = ["Baseline Meal", "Fasting Baseline", "Large Meal Spike"]
+SCENARIO_OPTIONS = [
+    "Baseline Meal",
+    "Fasting Baseline",
+    "Large Meal Spike",
+    "Dawn Phenomenon",
+    "Exercise Hypoglycemia",
+    "Missed Bolus",
+    "Late Correction",
+]
 
 with st.sidebar:
     st.markdown(f"""
@@ -407,7 +441,9 @@ with st.sidebar:
 
     st.header("Scenarios")
     scenario_a_name = st.selectbox("Scenario A", options=SCENARIO_OPTIONS, index=0)
+    st.caption(SCENARIO_DESCRIPTIONS.get(scenario_a_name, ""))
     scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
+    st.caption(SCENARIO_DESCRIPTIONS.get(scenario_b_name, ""))
 
     st.header("Simulation")
     duration_minutes = st.slider("Duration (minutes)", 30, 360, 180, 30)
@@ -418,6 +454,12 @@ with st.sidebar:
     max_insulin_on_board_u = st.slider("Max insulin on board (U)", 0.5, 10.0, 3.0, 0.1)
     min_predicted_glucose_mgdl = st.slider("Min predicted glucose (mg/dL)", 60, 120, 80, 1)
     require_confirmed_trend = st.checkbox("Require confirmed rising trend", value=True)
+
+    st.header("Controller")
+    min_excursion_delta = st.slider("Min excursion delta (mg/dL)", 0.0, 15.0, 0.0, 0.5,
+                                    help="Minimum glucose change per step to trigger correction. Filters noise-driven micro-excursions.")
+    microbolus_fraction = st.slider("Microbolus fraction", 0.1, 1.0, 1.0, 0.05,
+                                    help="Scale correction down to a fraction of full dose. 0.25 = quarter-dose microbolus strategy.")
 
     st.header("Pump")
     dose_increment_u = st.selectbox("Dose increment (U)", [0.05, 0.1], index=0)
@@ -447,6 +489,8 @@ if run_button:
             duration_minutes=duration_minutes,
             step_minutes=step_minutes,
             seed=42,
+            min_excursion_delta_mgdl=min_excursion_delta,
+            microbolus_fraction=microbolus_fraction,
         )
         records_b, summary_b = run_evaluation(
             simulation_inputs=build_scenario(scenario_b_name),
@@ -455,6 +499,8 @@ if run_button:
             duration_minutes=duration_minutes,
             step_minutes=step_minutes,
             seed=42,
+            min_excursion_delta_mgdl=min_excursion_delta,
+            microbolus_fraction=microbolus_fraction,
         )
 
     df_a = pd.DataFrame([r.__dict__ for r in records_a])

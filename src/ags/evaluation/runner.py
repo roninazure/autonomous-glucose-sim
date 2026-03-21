@@ -21,6 +21,8 @@ def run_evaluation(
     seed: int = 42,
     target_glucose_mgdl: float = 110.0,
     correction_factor_mgdl_per_unit: float = 50.0,
+    min_excursion_delta_mgdl: float = 0.0,
+    microbolus_fraction: float = 1.0,
 ) -> tuple[list[TimestepRecord], RunSummary]:
     safety_thresholds = safety_thresholds or SafetyThresholds()
     pump_config = pump_config or PumpConfig()
@@ -40,10 +42,19 @@ def run_evaluation(
     tracked_x1 = snapshots[0].insulin_compartment1_u
     tracked_x2 = snapshots[0].insulin_compartment2_u
 
+    # Rolling CGM history window (oldest → newest) fed to the predictor for
+    # exponential smoothing.  Seeded with the first snapshot's CGM reading.
+    _HISTORY_WINDOW = 5
+    cgm_history: list[float] = [snapshots[0].cgm_glucose_mgdl]
+
     for previous, current in zip(snapshots[:-1], snapshots[1:]):
         # Capture IOB before this step's delivery so the chart shows what the
         # controller and safety layer actually saw when making their decision.
         step_iob_u = insulin_on_board(tracked_x1, tracked_x2)
+
+        cgm_history.append(current.cgm_glucose_mgdl)
+        if len(cgm_history) > _HISTORY_WINDOW:
+            cgm_history.pop(0)
 
         controller_inputs = ControllerInputs(
             current_glucose_mgdl=current.cgm_glucose_mgdl,
@@ -51,6 +62,9 @@ def run_evaluation(
             insulin_on_board_u=step_iob_u,
             target_glucose_mgdl=target_glucose_mgdl,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
+            glucose_history=list(cgm_history),
+            min_excursion_delta_mgdl=min_excursion_delta_mgdl,
+            microbolus_fraction=microbolus_fraction,
         )
 
         _, _, recommendation, safety_decision = run_controller_with_safety(
