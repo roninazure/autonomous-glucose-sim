@@ -8,10 +8,8 @@ from ags.pump.state import PumpConfig
 from ags.safety.pipeline import run_controller_with_safety
 from ags.safety.state import SafetyThresholds
 from ags.simulation.engine import run_simulation
+from ags.simulation.insulin import advance_insulin_compartments, insulin_on_board
 from ags.simulation.state import SimulationInputs
-
-# Must match the decay factor used in src/ags/simulation/insulin.py
-_IOB_DECAY_FACTOR = 0.95
 
 
 def run_evaluation(
@@ -36,17 +34,17 @@ def run_evaluation(
 
     records: list[TimestepRecord] = []
 
-    # Track IOB independently so that each delivered dose feeds back into the
-    # next timestep's controller and safety decisions. Previously, the loop
-    # read IOB from the simulation snapshot, which never incorporated delivered
-    # insulin, making the safety IOB guard ineffective.
-    tracked_iob_u = snapshots[0].insulin_on_board_u
+    # Track the 2-compartment PK/PD state independently so that each
+    # delivered dose feeds back into the next timestep's controller and safety
+    # decisions using the same physiologically accurate model as the simulation.
+    tracked_x1 = snapshots[0].insulin_compartment1_u
+    tracked_x2 = snapshots[0].insulin_compartment2_u
 
     for previous, current in zip(snapshots[:-1], snapshots[1:]):
         controller_inputs = ControllerInputs(
             current_glucose_mgdl=current.cgm_glucose_mgdl,
             previous_glucose_mgdl=previous.cgm_glucose_mgdl,
-            insulin_on_board_u=tracked_iob_u,
+            insulin_on_board_u=insulin_on_board(tracked_x1, tracked_x2),
             target_glucose_mgdl=target_glucose_mgdl,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
         )
@@ -61,8 +59,15 @@ def run_evaluation(
             pump_config=pump_config,
         )
 
-        # Decay existing IOB then add what was just delivered.
-        tracked_iob_u = tracked_iob_u * _IOB_DECAY_FACTOR + pump_result.delivered_units
+        # Advance PK/PD state: the delivered dose enters the subcutaneous
+        # depot (x1) and transfers into the active pool (x2) over time.
+        tracked_x1, tracked_x2 = advance_insulin_compartments(
+            x1=tracked_x1,
+            x2=tracked_x2,
+            dose_u=pump_result.delivered_units,
+            step_minutes=step_minutes,
+            peak_minutes=simulation_inputs.insulin_peak_minutes,
+        )
 
         records.append(
             TimestepRecord(

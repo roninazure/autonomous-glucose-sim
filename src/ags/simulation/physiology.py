@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from ags.simulation.insulin import decay_insulin_on_board, insulin_glucose_effect_mgdl
+from ags.simulation.insulin import (
+    advance_insulin_compartments,
+    insulin_glucose_effect_mgdl,
+    insulin_on_board,
+)
 from ags.simulation.state import MealEvent, SimulationInputs, SimulationSnapshot
 
 
@@ -42,25 +46,40 @@ def advance_physiology(
     )
 
     meal_glucose_effect = active_meal_carbs * inputs.carb_impact_mgdl_per_g
-    insulin_glucose_effect = insulin_glucose_effect_mgdl(
-        insulin_on_board_u=snapshot.insulin_on_board_u,
+
+    # Glucose effect comes from the active (interstitial) pool, x2.
+    insulin_effect = insulin_glucose_effect_mgdl(
+        x2=snapshot.insulin_compartment2_u,
+        step_minutes=step_minutes,
+        peak_minutes=inputs.insulin_peak_minutes,
         insulin_sensitivity_mgdl_per_unit=inputs.insulin_sensitivity_mgdl_per_unit,
     )
 
     glucose_delta = (
         meal_glucose_effect
-        - insulin_glucose_effect
+        - insulin_effect
         + inputs.baseline_drift_mgdl_per_step
     )
 
     next_true_glucose = max(40.0, snapshot.true_glucose_mgdl + glucose_delta)
-    next_iob = decay_insulin_on_board(snapshot.insulin_on_board_u)
+
+    # Advance the 2-compartment PK/PD state. No new dose is injected here;
+    # the engine adds delivered insulin via the snapshot before calling this.
+    x1_next, x2_next = advance_insulin_compartments(
+        x1=snapshot.insulin_compartment1_u,
+        x2=snapshot.insulin_compartment2_u,
+        dose_u=0.0,  # doses are injected externally via delivered_insulin_u
+        step_minutes=step_minutes,
+        peak_minutes=inputs.insulin_peak_minutes,
+    )
 
     return SimulationSnapshot(
         timestamp_min=next_time,
         true_glucose_mgdl=next_true_glucose,
         cgm_glucose_mgdl=next_true_glucose,
-        insulin_on_board_u=next_iob,
+        insulin_on_board_u=insulin_on_board(x1_next, x2_next),
+        insulin_compartment1_u=x1_next,
+        insulin_compartment2_u=x2_next,
         active_meal_carbs_g=active_meal_carbs,
         delivered_insulin_u=snapshot.delivered_insulin_u,
         glucose_delta_mgdl=glucose_delta,
