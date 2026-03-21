@@ -4,8 +4,9 @@ from ags.controller.pipeline import run_controller
 from ags.controller.state import ControllerInputs
 from ags.evaluation.metrics import summarize_run
 from ags.evaluation.state import RunSummary, TimestepRecord
+from ags.pump.emulator import advance_dual_wave_state, apply_dual_wave_split, emulate_pump_delivery
 from ags.pump.pipeline import run_pump_with_safety_output
-from ags.pump.state import PumpConfig
+from ags.pump.state import DualWaveConfig, DualWaveState, PumpConfig
 from ags.safety.evaluator import evaluate_safety_stateful
 from ags.safety.integration import build_safety_inputs
 from ags.safety.state import SafetyThresholds, SuspendState
@@ -25,9 +26,12 @@ def run_evaluation(
     correction_factor_mgdl_per_unit: float = 50.0,
     min_excursion_delta_mgdl: float = 0.0,
     microbolus_fraction: float = 1.0,
+    ror_tiered_microbolus: bool = False,
+    dual_wave_config: DualWaveConfig | None = None,
 ) -> tuple[list[TimestepRecord], RunSummary]:
     safety_thresholds = safety_thresholds or SafetyThresholds()
     pump_config = pump_config or PumpConfig()
+    dual_wave_config = dual_wave_config or DualWaveConfig()
 
     snapshots = run_simulation(
         inputs=simulation_inputs,
@@ -53,6 +57,9 @@ def run_evaluation(
     # recovers above the resume threshold.
     suspend_state = SuspendState()
 
+    # Dual-wave extended tail state — persists across steps.
+    dual_wave_state = DualWaveState()
+
     for previous, current in zip(snapshots[:-1], snapshots[1:]):
         # Capture IOB before this step's delivery so the chart shows what the
         # controller and safety layer actually saw when making their decision.
@@ -71,6 +78,8 @@ def run_evaluation(
             glucose_history=list(cgm_history),
             min_excursion_delta_mgdl=min_excursion_delta_mgdl,
             microbolus_fraction=microbolus_fraction,
+            step_minutes=step_minutes,
+            ror_tiered_microbolus=ror_tiered_microbolus,
         )
 
         signal, prediction, recommendation = run_controller(controller_inputs)
@@ -88,17 +97,48 @@ def run_evaluation(
             suspend_state=suspend_state,
         )
 
+        # ── Dual-wave split ───────────────────────────────────────────────
+        # If dual-wave is enabled and this step delivers a bolus, split it
+        # into immediate + queued extended tail.
+        extended_delivered = 0.0
+
+        if dual_wave_config.enabled and safety_decision.allowed and safety_decision.final_units > 0:
+            immediate_u, dual_wave_state = apply_dual_wave_split(
+                total_units=safety_decision.final_units,
+                dual_wave_config=dual_wave_config,
+                dual_wave_state=dual_wave_state,
+                step_minutes=step_minutes,
+                pump_config=pump_config,
+            )
+            # Deliver only the immediate fraction through the normal pump path
+            from ags.safety.state import SafetyDecision as _SD
+            safety_decision = _SD(
+                status=safety_decision.status,
+                allowed=safety_decision.allowed,
+                final_units=immediate_u,
+                reason=safety_decision.reason + " [dual-wave: immediate portion]",
+            )
+        elif dual_wave_state.is_active:
+            # Advance the extended tail from the previous bolus even if there
+            # is no new recommendation this step.
+            extended_delivered, dual_wave_state = advance_dual_wave_state(
+                dual_wave_state=dual_wave_state,
+                pump_config=pump_config,
+            )
+
         pump_result = run_pump_with_safety_output(
             safety_decision=safety_decision,
             pump_config=pump_config,
         )
+
+        total_delivered = pump_result.delivered_units + extended_delivered
 
         # Advance PK/PD state: the delivered dose enters the subcutaneous
         # depot (x1) and transfers into the active pool (x2) over time.
         tracked_x1, tracked_x2 = advance_insulin_compartments(
             x1=tracked_x1,
             x2=tracked_x2,
-            dose_u=pump_result.delivered_units,
+            dose_u=total_delivered,
             step_minutes=step_minutes,
             peak_minutes=simulation_inputs.insulin_peak_minutes,
         )
@@ -111,9 +151,11 @@ def run_evaluation(
                 recommended_units=recommendation.recommended_units,
                 safety_status=safety_decision.status,
                 safety_final_units=safety_decision.final_units,
-                pump_delivered_units=pump_result.delivered_units,
+                pump_delivered_units=total_delivered,
                 insulin_on_board_u=step_iob_u,
                 is_suspended=suspend_state.is_suspended,
+                dual_wave_extended_units=extended_delivered,
+                rate_mgdl_per_min=signal.rate_mgdl_per_min,
             )
         )
 

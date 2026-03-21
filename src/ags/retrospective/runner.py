@@ -52,6 +52,7 @@ class RetrospectiveConfig:
     min_excursion_delta_mgdl: float = 0.0
     microbolus_fraction: float = 1.0
     insulin_peak_minutes: float = 75.0
+    ror_tiered_microbolus: bool = False
 
 
 def run_retrospective(
@@ -118,6 +119,8 @@ def run_retrospective(
             glucose_history=list(cgm_history),
             min_excursion_delta_mgdl=config.min_excursion_delta_mgdl,
             microbolus_fraction=config.microbolus_fraction,
+            step_minutes=int(step_minutes),
+            ror_tiered_microbolus=config.ror_tiered_microbolus,
         )
 
         signal, prediction, recommendation = run_controller(controller_inputs)
@@ -161,6 +164,7 @@ def run_retrospective(
             pump_delivered_units=pump_result.delivered_units,
             insulin_on_board_u=step_iob_u,
             is_suspended=suspend_state.is_suspended,
+            rate_mgdl_per_min=signal.rate_mgdl_per_min,
         ))
 
     summary = summarize_run(records)

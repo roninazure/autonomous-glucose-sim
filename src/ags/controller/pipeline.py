@@ -10,6 +10,6 @@ def run_controller(
     inputs: ControllerInputs,
 ) -> tuple[ExcursionSignal, GlucosePrediction, CorrectionRecommendation]:
     signal = detect_excursion(inputs)
-    prediction = predict_glucose(inputs, signal)
-    recommendation = recommend_correction(inputs, prediction)
+    prediction = predict_glucose(inputs, signal, step_minutes=inputs.step_minutes)
+    recommendation = recommend_correction(inputs, prediction, signal=signal)
     return signal, prediction, recommendation

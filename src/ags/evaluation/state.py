@@ -14,6 +14,10 @@ class TimestepRecord:
     pump_delivered_units: float
     insulin_on_board_u: float = 0.0
     is_suspended: bool = False
+    # Extended tail from a dual-wave bolus delivered this step (0 if not active)
+    dual_wave_extended_units: float = 0.0
+    # Observed rate of rise at this timestep in mg/dL/min
+    rate_mgdl_per_min: float = 0.0
 
 
 @dataclass

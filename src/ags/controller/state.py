@@ -19,12 +19,24 @@ class ControllerInputs:
     min_excursion_delta_mgdl: float = 0.0
     # Fraction of the calculated correction to deliver as a microbolus.
     # 1.0 = full correction; 0.25 = quarter-dose microbolus strategy.
+    # Ignored when ror_tiered_microbolus=True.
     microbolus_fraction: float = 1.0
+    # CGM step duration — used to convert per-step delta to mg/dL/min and to
+    # scale detection thresholds correctly for 1-min or 5-min loops.
+    step_minutes: int = 5
+    # When True, overrides microbolus_fraction with a tiered fraction derived
+    # from the observed rate of rise (mg/dL/min):
+    #   < 1.0 → 0.0   (flat — no extra micro-bolus pressure)
+    #   1–2   → 0.25
+    #   2–3   → 0.50
+    #   ≥ 3.0 → 1.0   (aggressive spike — full correction)
+    ror_tiered_microbolus: bool = False
 
 
 @dataclass
 class ExcursionSignal:
     glucose_delta_mgdl: float
+    rate_mgdl_per_min: float   # glucose_delta / step_minutes
     rising: bool
     falling: bool
 
