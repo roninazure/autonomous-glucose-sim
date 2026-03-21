@@ -282,7 +282,7 @@ def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
         hovertemplate="%{y:.1f} mg/dL<extra>B</extra>",
     ))
 
-    layout = _layout("Glucose Trace (mg/dL)", height=360)
+    layout = _layout("Glucose over time (mg/dL)", height=360)
     layout["yaxis"]["title"] = "mg/dL"
     layout["xaxis"]["title"] = "minutes"
     fig.update_layout(**layout)
@@ -315,7 +315,7 @@ def insulin_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: s
         hovertemplate="%{y:.3f} U<extra>B Recommended</extra>",
     ))
 
-    layout = _layout("Insulin Delivered (units)", height=280)
+    layout = _layout("Insulin delivered (units)", height=280)
     layout["yaxis"]["title"] = "Units"
     layout["xaxis"]["title"] = "Time (minutes)"
     layout["barmode"] = "overlay"
@@ -341,7 +341,7 @@ def iob_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
         hovertemplate="%{y:.3f} U<extra>B IOB</extra>",
     ))
 
-    layout = _layout("Active Insulin on Board (IOB)", height=240)
+    layout = _layout("Active insulin on board (IOB)", height=240)
     layout["yaxis"]["title"] = "Units active"
     layout["xaxis"]["title"] = "Time (minutes)"
     fig.update_layout(**layout)
@@ -357,19 +357,19 @@ def safety_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: st
         if not blocked.empty:
             fig.add_trace(go.Scatter(
                 x=blocked["timestamp_min"], y=[label] * len(blocked),
-                mode="markers", name=f"{label} Blocked",
+                mode="markers", name=f"{label} Dose withheld",
                 marker=dict(symbol="x", size=12, color=RED, line=dict(width=2, color=RED)),
-                hovertemplate="t=%{x} min — BLOCKED<extra>" + label + "</extra>",
+                hovertemplate="t=%{x} min — dose withheld<extra>" + label + "</extra>",
             ))
         if not clipped.empty:
             fig.add_trace(go.Scatter(
                 x=clipped["timestamp_min"], y=[label] * len(clipped),
-                mode="markers", name=f"{label} Clipped",
+                mode="markers", name=f"{label} Dose capped",
                 marker=dict(symbol="triangle-up", size=11, color=AMBER, line=dict(width=1, color=AMBER)),
-                hovertemplate="t=%{x} min — CLIPPED<extra>" + label + "</extra>",
+                hovertemplate="t=%{x} min — dose capped at limit<extra>" + label + "</extra>",
             ))
 
-    layout = _layout("Safety Interventions", height=200)
+    layout = _layout("Safety interventions", height=200)
     layout["xaxis"]["title"] = "Time (minutes)"
     layout["yaxis"]["categoryorder"] = "array"
     layout["yaxis"]["categoryarray"] = ["B", "A"]
@@ -380,13 +380,13 @@ def safety_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: st
 
 # ── Scenario metadata ────────────────────────────────────────────────────────
 SCENARIO_DESCRIPTIONS = {
-    "Baseline Meal":        "45g carbs · standard ISF · controller proves baseline TIR",
-    "Fasting Baseline":     "No meal · flat drift · tests controller restraint (zero bolus pressure)",
-    "Large Meal Spike":     "90g carbs · steep post-prandial climb · stress-tests dosing cap",
-    "Dawn Phenomenon":      "No meal · cortisol-driven drift · slow rise the controller must catch",
-    "Exercise Hypoglycemia":"Negative drift · high ISF · safety layer must block compounding drops",
-    "Missed Bolus":         "75g meal · no pre-bolus · tests retroactive correction recovery",
-    "Late Correction":      "60g meal + snack · delayed insulin · timing mismatch risk",
+    "Baseline Meal":        "45 g carbohydrate meal · typical insulin sensitivity · validates time-in-range under standard conditions",
+    "Fasting Baseline":     "No meal · stable overnight drift · confirms the algorithm withholds insulin appropriately when no correction is needed",
+    "Large Meal Spike":     "90 g carbohydrate meal · steep post-prandial rise · evaluates dosing behaviour during a large glycaemic excursion",
+    "Dawn Phenomenon":      "No meal · cortisol-driven pre-dawn rise · assesses whether the algorithm detects and corrects a slow, sustained elevation",
+    "Exercise Hypoglycemia":"Falling glucose during exercise · high insulin sensitivity · verifies that safety checks prevent compounding hypoglycaemia",
+    "Missed Bolus":         "75 g meal with no pre-meal bolus · tests how the algorithm recovers from a delayed correction",
+    "Late Correction":      "60 g meal plus snack · insulin given late · explores the risk of glucose-insulin timing mismatch",
 }
 
 
@@ -404,21 +404,21 @@ def decision_timeline_panel(
     if not explanations:
         return
 
-    with st.expander("▶  DECISION TIMELINE", expanded=False):
+    with st.expander("Decision log", expanded=False):
         # ── Build display DataFrame ─────────────────────────────────────
         rows = []
         gate_ids = []
         for exp in explanations:
             rows.append({
-                "t (min)": exp.timestamp_min,
-                "CGM": f"{exp.cgm_mgdl:.0f}",
-                "trend": f"{exp.trend_arrow} {exp.trend_rate_mgdl_per_min:+.1f}/min",
-                "pred +30": f"{exp.predicted_glucose_mgdl:.0f}",
-                "IOB (U)": f"{exp.iob_u:.2f}",
-                "rec'd (U)": f"{exp.recommended_units:.3f}",
-                "gate": GATE_LABELS.get(exp.safety_gate, exp.safety_gate),
-                "delivered (U)": f"{exp.delivered_units:.3f}",
-                "narrative": exp.narrative,
+                "Time (min)": exp.timestamp_min,
+                "Glucose (mg/dL)": f"{exp.cgm_mgdl:.0f}",
+                "Trend": f"{exp.trend_arrow} {exp.trend_rate_mgdl_per_min:+.1f}/min",
+                "Predicted +30 min": f"{exp.predicted_glucose_mgdl:.0f}",
+                "Active insulin (U)": f"{exp.iob_u:.2f}",
+                "Calculated dose (U)": f"{exp.recommended_units:.3f}",
+                "Safety check": GATE_LABELS.get(exp.safety_gate, exp.safety_gate),
+                "Delivered (U)": f"{exp.delivered_units:.3f}",
+                "Clinical rationale": exp.narrative,
             })
             gate_ids.append(exp.safety_gate)
 
@@ -432,7 +432,7 @@ def decision_timeline_panel(
             bg = f"{fg}22"
             result = [""] * len(row)
             try:
-                gate_idx = list(_tl_df.columns).index("gate")
+                gate_idx = list(_tl_df.columns).index("Safety check")
                 result[gate_idx] = f"background-color:{bg}; color:{fg}; font-weight:700;"
             except ValueError:
                 pass
@@ -443,9 +443,8 @@ def decision_timeline_panel(
 
         # ── Step drill-down ─────────────────────────────────────────────
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.55rem;
-                    color:{MUTED}; letter-spacing:3px; text-transform:uppercase;
-                    margin:1rem 0 0.4rem 0;">── STEP DRILL-DOWN</div>
+        <div style="font-family:'Inter',sans-serif; font-size:0.72rem; font-weight:600;
+                    color:{MUTED}; margin:1rem 0 0.4rem 0;">Step detail</div>
         """, unsafe_allow_html=True)
 
         _ts_options = [f"t = {e.timestamp_min} min" for e in explanations]
@@ -461,7 +460,7 @@ def decision_timeline_panel(
         _gate_fg = GATE_COLOURS.get(_e.safety_gate, "#888888")
         _gate_lbl = GATE_LABELS.get(_e.safety_gate, _e.safety_gate)
         _susp_line = (
-            f"  suspension    : step {_e.suspension_step}\n"
+            f"  Dosing paused   : interval {_e.suspension_step}\n"
             if _e.is_suspended else ""
         )
 
@@ -470,24 +469,23 @@ def decision_timeline_panel(
             border-radius:6px; padding:1rem 1.25rem; margin-top:0.25rem;
             font-family:'JetBrains Mono',monospace; font-size:0.78rem;
             color:{WHITE}; line-height:1.9; white-space:pre;">
-<span style="color:{NEON_DIM}">┌─ t = {_e.timestamp_min} min ──────────────────────────────────────</span>
-<span style="color:{CYAN}">  cgm            : {_e.cgm_mgdl:.1f} mg/dL</span>
-<span style="color:{WHITE}">  trend           : {_e.trend_arrow}  {_e.trend_rate_mgdl_per_min:+.2f} mg/dL/min</span>
-<span style="color:{WHITE}">  predicted +{_e.prediction_horizon_min}   : {_e.predicted_glucose_mgdl:.1f} mg/dL</span>
-<span style="color:{WHITE}">  IOB             : {_e.iob_u:.3f} U</span>
-<span style="color:{NEON_DIM}">├─ controller ──────────────────────────────────────────────────</span>
-<span style="color:{WHITE}">  recommended     : {_e.recommended_units:.3f} U</span>
-<span style="color:{MUTED}">  reason          : {_e.controller_reason}</span>
-<span style="color:{NEON_DIM}">├─ safety ───────────────────────────────────────────────────────</span>
-<span style="color:{_gate_fg}">  gate            : {_gate_lbl}</span>
-<span style="color:{MUTED}">  reason          : {_e.safety_reason}</span>
-<span style="color:{WHITE}">  status          : {_e.safety_status}</span>
-<span style="color:{WHITE}">  final units     : {_e.safety_final_units:.3f} U</span>{_susp_line}
-<span style="color:{NEON_DIM}">├─ delivery ─────────────────────────────────────────────────────</span>
-<span style="color:{NEON}">  delivered       : {_e.delivered_units:.3f} U</span>
-<span style="color:{NEON_DIM}">├─ narrative ────────────────────────────────────────────────────</span>
+<span style="color:{MUTED}">── t = {_e.timestamp_min} min ─────────────────────────────────────────</span>
+<span style="color:{CYAN}">  CGM glucose       : {_e.cgm_mgdl:.1f} mg/dL</span>
+<span style="color:{WHITE}">  Glucose trend     : {_e.trend_arrow}  {_e.trend_rate_mgdl_per_min:+.2f} mg/dL/min</span>
+<span style="color:{WHITE}">  Predicted (+{_e.prediction_horizon_min} min) : {_e.predicted_glucose_mgdl:.1f} mg/dL</span>
+<span style="color:{WHITE}">  Active insulin    : {_e.iob_u:.3f} U</span>
+<span style="color:{MUTED}">── Algorithm ──────────────────────────────────────────────────────</span>
+<span style="color:{WHITE}">  Calculated dose   : {_e.recommended_units:.3f} U</span>
+<span style="color:{MUTED}">  Rationale         : {_e.controller_reason}</span>
+<span style="color:{MUTED}">── Safety check ───────────────────────────────────────────────────</span>
+<span style="color:{_gate_fg}">  Decision          : {_gate_lbl}</span>
+<span style="color:{MUTED}">  Reason            : {_e.safety_reason}</span>
+<span style="color:{WHITE}">  Outcome           : {_e.safety_status}</span>
+<span style="color:{WHITE}">  Final dose        : {_e.safety_final_units:.3f} U</span>{_susp_line}
+<span style="color:{MUTED}">── Delivery ───────────────────────────────────────────────────────</span>
+<span style="color:{NEON}">  Delivered         : {_e.delivered_units:.3f} U</span>
+<span style="color:{MUTED}">── Clinical summary ───────────────────────────────────────────────</span>
 <span style="color:{WHITE}">  {_e.narrative}</span>
-<span style="color:{NEON_DIM}">└──────────────────────────────────────────────────────────────</span>
 </div>
         """, unsafe_allow_html=True)
 
@@ -538,33 +536,33 @@ st.markdown(f"""
   </div>
   <div style="font-family:'Inter',sans-serif; font-size:0.82rem;
               color:{MUTED}; margin-top:0.4rem;">
-    2-compartment PK/PD insulin model · Gamma gut absorption · 1-min or 5-min CGM loop
+    Physiological insulin &amp; glucose model · Supports FreeStyle Libre and Dexcom CGM intervals
   </div>
   <div style="margin-top:0.9rem; display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center;">
-    <span style="background:rgba(248,113,113,0.12); border:1px solid {RED}; color:{RED};
+    <span style="background:rgba(220,38,38,0.08); border:1px solid {RED}; color:{RED};
                  padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
                  border-radius:4px; font-weight:500;">
-      ⚠ Research simulation — not for clinical use
+      ⚠ Research use only — not for clinical decision-making
     </span>
-    <span style="background:rgba(74,222,128,0.1); border:1px solid {NEON_DIM}; color:{NEON};
+    <span style="background:rgba(22,163,74,0.08); border:1px solid {NEON_DIM}; color:{NEON};
                  padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
                  border-radius:4px; font-weight:500;">
-      ✓ Active insulin tracking (IOB)
+      ✓ Active insulin tracking
     </span>
-    <span style="background:rgba(74,222,128,0.1); border:1px solid {NEON_DIM}; color:{NEON};
+    <span style="background:rgba(22,163,74,0.08); border:1px solid {NEON_DIM}; color:{NEON};
                  padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
                  border-radius:4px; font-weight:500;">
       ✓ Multi-layer safety checks
     </span>
-    <span style="background:rgba(96,165,250,0.1); border:1px solid {CYAN}; color:{CYAN};
+    <span style="background:rgba(29,78,216,0.08); border:1px solid {CYAN}; color:{CYAN};
                  padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
                  border-radius:4px; font-weight:500;">
-      ✓ Split bolus delivery
+      ✓ Split bolus (dual-wave) delivery
     </span>
-    <span style="background:rgba(96,165,250,0.1); border:1px solid {CYAN}; color:{CYAN};
+    <span style="background:rgba(29,78,216,0.08); border:1px solid {CYAN}; color:{CYAN};
                  padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
                  border-radius:4px; font-weight:500;">
-      ✓ Rise-rate–scaled dosing
+      ✓ Glucose trend–guided dosing
     </span>
   </div>
 </div>
@@ -617,12 +615,12 @@ with st.expander("Clinical Algorithm Features", expanded=False):
 <div style="font-family:'Inter',sans-serif; font-size:0.72rem; font-weight:700;
             color:{CYAN}; text-transform:uppercase; letter-spacing:0.5px;
             margin-bottom:0.4rem; margin-top:0.25rem;">
-  3 · Smart Dose Scaling (Rise-Rate Tiers)
+  3 · Trend-Guided Dosing
 </div>
 <div style="font-family:'Inter',sans-serif; font-size:0.85rem; color:{WHITE};
             line-height:1.7; margin-bottom:0.5rem;">
-  The correction dose is scaled automatically based on how fast glucose
-  is rising — no fixed fraction needed.
+  The correction dose is automatically scaled to how fast glucose is
+  rising — the faster the rise, the larger the dose.
 </div>
 <div style="background:{BG3}; border:1px solid {NEON_DIM}; border-radius:4px;
             padding:0.6rem 0.9rem; font-family:'Inter',sans-serif;
@@ -819,50 +817,50 @@ with st.sidebar:
              "all dosing is suspended until it recovers.",
     )
     require_confirmed_trend = st.checkbox(
-        "Only dose on a confirmed rising trend",
+        "Require two consecutive rising readings before dosing",
         value=True,
-        help="Requires glucose to be rising over at least two consecutive readings "
-             "before the controller will recommend a correction. "
-             "Reduces false corrections on noisy sensor readings.",
+        help="Adds a confirmation step: glucose must be rising on at least two "
+             "consecutive CGM readings before a correction is recommended. "
+             "Reduces unnecessary doses caused by sensor noise.",
     )
 
     st.header("Dosing Strategy")
     min_excursion_delta = st.slider(
-        "Ignore glucose changes smaller than (mg/dL)",
+        "Minimum glucose change to trigger a dose (mg/dL)",
         0.0, 15.0, 0.0, 0.5,
-        help="The controller ignores small fluctuations below this threshold — "
-             "useful for filtering out sensor noise near the target range.",
+        help="Small glucose fluctuations below this value are ignored. "
+             "Useful for filtering out sensor noise when glucose is near the target range.",
     )
 
     _ror_tiered = st.checkbox(
-        "Smart dose scaling by rise rate",
+        "Scale dose by glucose trend speed",
         value=False,
         help="Automatically adjusts how much of the correction is given based on "
              "how fast glucose is rising:\n"
-             "  Flat (< 1 mg/dL/min)    → no dose\n"
-             "  Moderate (1–2 mg/dL/min) → 25% of correction\n"
-             "  Rising fast (2–3)        → 50%\n"
+             "  Stable (< 1 mg/dL/min)    → no dose\n"
+             "  Rising moderately (1–2 mg/dL/min) → 25% of correction\n"
+             "  Rising quickly (2–3 mg/dL/min) → 50%\n"
              "  Spiking (≥ 3 mg/dL/min) → full correction\n\n"
              "When on, overrides the manual dose fraction slider.",
     )
     if _ror_tiered:
         microbolus_fraction = 1.0
-        st.caption("Dose fraction set automatically by rise rate (see tiers above).")
+        st.caption("Dose size is set automatically based on glucose trend speed.")
     else:
         microbolus_fraction = st.slider(
-            "Correction dose size (fraction of full correction)",
+            "Correction dose size (fraction of calculated dose)",
             0.0, 1.0, 0.25, 0.05,
             help="How much of the calculated correction to deliver each interval. "
-                 "0.25 = quarter-dose micro-bolus; 1.0 = full correction each time.",
+                 "0.25 = conservative quarter-dose; 1.0 = full correction each time.",
         )
 
-    st.header("Split Delivery (Dual-Wave)")
+    st.header("Split Bolus Delivery")
     _dw_enabled = st.checkbox(
-        "Split each dose into immediate + extended",
+        "Use dual-wave (combo) bolus delivery",
         value=False,
-        help="Mimics a combo/dual-wave bolus as used on insulin pumps. "
-             "A portion is delivered immediately to cover the initial spike; "
-             "the rest drips in slowly over a set window.\n\n"
+        help="Mimics the combo/dual-wave bolus mode available on insulin pumps. "
+             "A portion is delivered immediately to cover the initial glucose rise; "
+             "the remainder is spread slowly over a set window to match prolonged carb absorption.\n\n"
              "Example: 6 units total → 2 units now + 4 units over 20 min.",
     )
     if _dw_enabled:
@@ -887,18 +885,18 @@ with st.sidebar:
 
     st.header("Pump Hardware")
     dose_increment_u = st.selectbox(
-        "Smallest deliverable dose step",
+        "Minimum dose increment",
         [0.05, 0.1],
         index=0,
         format_func=lambda v: f"{v} units",
-        help="Minimum dose increment the pump can deliver. "
-             "All doses are rounded to the nearest multiple.",
+        help="The smallest amount of insulin the pump can deliver. "
+             "All calculated doses are rounded to the nearest increment.",
     )
     pump_max_units_per_interval = st.slider(
-        "Pump hard maximum per dose (units)",
+        "Pump maximum dose per delivery (units)",
         0.05, 3.0, 1.0, 0.05,
-        help="Physical maximum the pump will deliver in one interval, "
-             "independent of the safety layer limit above.",
+        help="The physical maximum the pump will deliver in one interval. "
+             "This is a hardware limit, separate from the safety limit above.",
     )
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
@@ -966,20 +964,20 @@ if run_button:
 
         # ── Header ─────────────────────────────────────────────────────────
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                    letter-spacing:4px; text-transform:uppercase; margin-bottom:0.75rem;">
-          ── RETROSPECTIVE REPLAY · {_trace_label.upper()}
+        <div style="font-family:'Inter',sans-serif; font-size:1rem; font-weight:700;
+                    color:{WHITE}; margin-bottom:0.75rem;">
+          Retrospective Replay &mdash; {_trace_label}
         </div>
         """, unsafe_allow_html=True)
 
         # ── Metric row ─────────────────────────────────────────────────────
         rc1, rc2, rc3, rc4, rc5, rc6 = st.columns(6)
         rc1.metric("Time in Range", f"{retro_summary.percent_time_in_range:.1f}%")
-        rc2.metric("Avg CGM", f"{retro_summary.average_cgm_glucose_mgdl:.0f} mg/dL")
-        rc3.metric("Peak CGM", f"{retro_summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
-        rc4.metric("Delivered U", f"{retro_summary.total_insulin_delivered_u:.2f}")
-        rc5.metric("Blocked", retro_summary.blocked_decisions)
-        rc6.metric("Suspended", retro_summary.time_suspended_steps)
+        rc2.metric("Average glucose", f"{retro_summary.average_cgm_glucose_mgdl:.0f} mg/dL")
+        rc3.metric("Peak glucose", f"{retro_summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
+        rc4.metric("Total insulin delivered (U)", f"{retro_summary.total_insulin_delivered_u:.2f}")
+        rc5.metric("Doses withheld", retro_summary.blocked_decisions)
+        rc6.metric("Dosing paused", retro_summary.time_suspended_steps)
 
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
@@ -1017,11 +1015,11 @@ if run_button:
             _rCGM.add_trace(go.Scatter(
                 x=_blocked_df["timestamp_min"],
                 y=_blocked_df["cgm_glucose_mgdl"],
-                mode="markers", name="Blocked",
+                mode="markers", name="Dose withheld",
                 marker=dict(symbol="x", size=10, color=RED, line=dict(width=2, color=RED)),
-                hovertemplate="t=%{x} min — BLOCKED at %{y:.1f} mg/dL<extra>Blocked</extra>",
+                hovertemplate="t=%{x} min — dose withheld at %{y:.1f} mg/dL<extra>Withheld</extra>",
             ))
-        _rCGM_layout = _layout(f"CGM TRACE · CONTROLLER DECISIONS", height=400)
+        _rCGM_layout = _layout("CGM trace — algorithm decisions overlaid", height=400)
         _rCGM_layout["yaxis"]["title"] = "mg/dL"
         _rCGM_layout["xaxis"]["title"] = "minutes"
         _rCGM.update_layout(**_rCGM_layout)
@@ -1042,7 +1040,7 @@ if run_button:
                 line=dict(color=NEON_DIM, width=1.5, dash="dot"),
                 hovertemplate="%{y:.3f} U<extra>Recommended</extra>",
             ))
-            _rIns_layout = _layout("HYPOTHETICAL INSULIN DELIVERY", height=280)
+            _rIns_layout = _layout("Hypothetical insulin delivery", height=280)
             _rIns_layout["yaxis"]["title"] = "units"
             _rIns_layout["xaxis"]["title"] = "minutes"
             _rIns_layout["barmode"] = "overlay"
@@ -1057,7 +1055,7 @@ if run_button:
                 fill="tozeroy", fillcolor="rgba(0,245,255,0.07)",
                 hovertemplate="%{y:.3f} U<extra>IOB</extra>",
             ))
-            _rIOB_layout = _layout("HYPOTHETICAL IOB", height=280)
+            _rIOB_layout = _layout("Hypothetical active insulin (IOB)", height=280)
             _rIOB_layout["yaxis"]["title"] = "IOB (U)"
             _rIOB_layout["xaxis"]["title"] = "minutes"
             _rIOB.update_layout(**_rIOB_layout)
@@ -1080,34 +1078,34 @@ if run_button:
         _retro_report["insulin_peak_minutes"] = float(retro_peak)
 
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                    letter-spacing:4px; text-transform:uppercase; margin:1rem 0 0.5rem 0;">
-          ── RETROSPECTIVE REPORT EXPORT
+        <div style="font-family:'Inter',sans-serif; font-size:0.8rem; font-weight:600;
+                    color:{WHITE}; margin:1rem 0 0.5rem 0;">
+          Report export
         </div>
         """, unsafe_allow_html=True)
         _rpass = _retro_report["verdicts"]["overall_pass"]
         _rcolor = NEON if _rpass else RED
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+        <div style="font-family:'Inter',sans-serif; font-size:0.82rem;
                     color:{_rcolor}; margin-bottom:0.5rem;">
-          {"✓ PASS" if _rpass else "✗ FAIL"} &nbsp;·&nbsp;
-          TIR {"✓" if _retro_report["verdicts"]["tir_pass"] else "✗"} &nbsp;·&nbsp;
-          Peak {"✓" if _retro_report["verdicts"]["peak_pass"] else "✗"} &nbsp;·&nbsp;
-          Hypo {"✓" if _retro_report["verdicts"]["hypo_pass"] else "✗"} &nbsp;·&nbsp;
-          SD {"✓" if _retro_report["verdicts"]["variability_pass"] else "✗"}
+          {"✓ Meets ADA/EASD targets" if _rpass else "✗ Outside ADA/EASD targets"} &nbsp;·&nbsp;
+          Time in Range {"✓" if _retro_report["verdicts"]["tir_pass"] else "✗"} &nbsp;·&nbsp;
+          Peak glucose {"✓" if _retro_report["verdicts"]["peak_pass"] else "✗"} &nbsp;·&nbsp;
+          Hypoglycaemia {"✓" if _retro_report["verdicts"]["hypo_pass"] else "✗"} &nbsp;·&nbsp;
+          Variability {"✓" if _retro_report["verdicts"]["variability_pass"] else "✗"}
         </div>
         """, unsafe_allow_html=True)
         _rex1, _rex2 = st.columns(2)
         with _rex1:
             st.download_button(
-                label="↓  EXPORT RETROSPECTIVE REPORT (JSON)",
+                label="Download retrospective report (JSON)",
                 data=json.dumps(_retro_report, indent=2),
                 file_name=f"swarm_retro_{_trace_label.lower()[:30].replace(' ', '_')}.json",
                 mime="application/json",
             )
         with _rex2:
             st.download_button(
-                label="↓  EXPORT TRACE AS CSV",
+                label="Download CGM trace (CSV)",
                 data=readings_to_csv(retro_readings),
                 file_name=f"cgm_trace_{_trace_label.lower()[:30].replace(' ', '_')}.csv",
                 mime="text/csv",
@@ -1151,21 +1149,21 @@ if run_button:
         _PROFILE_COLORS = ["#39ff14", "#ff4d6d", "#ffbe0b", "#00f5ff"]
 
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                    letter-spacing:4px; text-transform:uppercase; margin-bottom:0.75rem;">
-          ── PROFILE SWEEP · {sweep_scenario_name.upper()}
+        <div style="font-family:'Inter',sans-serif; font-size:1rem; font-weight:700;
+                    color:{WHITE}; margin-bottom:0.75rem;">
+          Patient Population Results &mdash; {sweep_scenario_name}
         </div>
         """, unsafe_allow_html=True)
 
         # Overall population pass/fail banner
         _all_pass = all(r.report["verdicts"]["overall_pass"] for r in sweep_results)
         _pop_color = NEON if _all_pass else RED
-        _pop_text = "◉ POPULATION PASS — all profiles meet ADA/EASD targets" \
-            if _all_pass else "⚠ POPULATION FAIL — one or more profiles outside targets"
+        _pop_text = "✓ All patient profiles meet ADA/EASD glycaemic targets" \
+            if _all_pass else "⚠ One or more patient profiles fall outside ADA/EASD targets"
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem;
-                    color:{_pop_color}; border:1px solid {_pop_color};
-                    padding:0.5rem 1rem; margin-bottom:1rem; letter-spacing:2px;">
+        <div style="font-family:'Inter',sans-serif; font-size:0.875rem; font-weight:600;
+                    color:{_pop_color}; border:1px solid {_pop_color}; border-radius:6px;
+                    padding:0.6rem 1rem; margin-bottom:1rem;">
           {_pop_text}
         </div>
         """, unsafe_allow_html=True)
@@ -1178,26 +1176,26 @@ if run_button:
             _ppass = "✓ PASS" if _pv["overall_pass"] else "✗ FAIL"
             with _pcols[_i]:
                 st.markdown(f"""
-                <div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+                <div style="font-family:'Inter',sans-serif; font-size:0.82rem; font-weight:600;
                             color:{_pc}; border-left:3px solid {_pc};
-                            padding-left:0.6rem; margin-bottom:0.4rem; letter-spacing:1px;">
-                  {_sr.profile.name.upper()}<br/>
-                  <span style="font-size:0.55rem; color:{MUTED};">{_sr.profile.description}</span>
+                            padding-left:0.6rem; margin-bottom:0.4rem;">
+                  {_sr.profile.name}<br/>
+                  <span style="font-size:0.75rem; font-weight:400; color:{MUTED};">{_sr.profile.description}</span>
                 </div>
                 """, unsafe_allow_html=True)
-                st.metric("TIR", f"{_sr.summary.percent_time_in_range:.1f}%")
-                st.metric("Peak CGM", f"{_sr.summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
-                st.metric("Avg CGM", f"{_sr.summary.average_cgm_glucose_mgdl:.0f} mg/dL")
-                st.metric("Glucose SD", f"{_sr.summary.glucose_variability_sd_mgdl:.1f}")
+                st.metric("Time in Range", f"{_sr.summary.percent_time_in_range:.1f}%")
+                st.metric("Peak glucose", f"{_sr.summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
+                st.metric("Average glucose", f"{_sr.summary.average_cgm_glucose_mgdl:.0f} mg/dL")
+                st.metric("Glucose variability (SD)", f"{_sr.summary.glucose_variability_sd_mgdl:.1f}")
                 _tir_v = "✓" if _pv["tir_pass"] else "✗"
                 _pk_v = "✓" if _pv["peak_pass"] else "✗"
                 _hy_v = "✓" if _pv["hypo_pass"] else "✗"
                 _sd_v = "✓" if _pv["variability_pass"] else "✗"
                 st.markdown(f"""
-                <div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+                <div style="font-family:'Inter',sans-serif; font-size:0.78rem;
                             color:{_pc if _pv["overall_pass"] else RED}; margin-top:0.3rem;">
                   {_ppass} &nbsp;·&nbsp; TIR {_tir_v} &nbsp;·&nbsp; Peak {_pk_v}
-                  &nbsp;·&nbsp; Hypo {_hy_v} &nbsp;·&nbsp; SD {_sd_v}
+                  &nbsp;·&nbsp; Hypo {_hy_v} &nbsp;·&nbsp; Variability {_sd_v}
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1220,7 +1218,7 @@ if run_button:
                 line=dict(color=_PROFILE_COLORS[_i], width=2),
                 hovertemplate="%{y:.1f} mg/dL<extra>" + _sr.profile.name + "</extra>",
             ))
-        _cgm_layout = _layout(f"CGM TRAJECTORY · {sweep_scenario_name.upper()}", height=380)
+        _cgm_layout = _layout(f"Glucose trajectory — {sweep_scenario_name}", height=380)
         _cgm_layout["yaxis"]["title"] = "mg/dL"
         _cgm_layout["xaxis"]["title"] = "minutes"
         _cgm_fig.update_layout(**_cgm_layout)
@@ -1236,7 +1234,7 @@ if run_button:
                 marker_color=_PROFILE_COLORS[_i], opacity=0.75,
                 hovertemplate="%{y:.3f} U<extra>" + _sr.profile.name + "</extra>",
             ))
-        _ins_layout = _layout("INSULIN DELIVERY PER PROFILE", height=280)
+        _ins_layout = _layout("Insulin delivered by patient profile", height=280)
         _ins_layout["yaxis"]["title"] = "units"
         _ins_layout["xaxis"]["title"] = "minutes"
         _ins_layout["barmode"] = "group"
@@ -1244,12 +1242,12 @@ if run_button:
         st.plotly_chart(_ins_fig, width="stretch")
 
         # Summary table
-        with st.expander("FULL METRICS TABLE", expanded=False):
+        with st.expander("Full metrics table", expanded=False):
             _tbl_data = {
                 "Metric": [
-                    "Time in Range %", "Avg CGM (mg/dL)", "Peak CGM (mg/dL)",
-                    "Glucose SD (mg/dL)", "Time Below 70 (steps)", "Time Above 250 (steps)",
-                    "Delivered Insulin (U)", "Blocked Decisions", "Suspended Steps",
+                    "Time in Range (%)", "Average glucose (mg/dL)", "Peak glucose (mg/dL)",
+                    "Glucose variability SD (mg/dL)", "Time below 70 mg/dL (readings)", "Time above 250 mg/dL (readings)",
+                    "Insulin delivered (U)", "Doses withheld", "Dosing paused (readings)",
                 ],
             }
             for _sr in sweep_results:
@@ -1269,14 +1267,14 @@ if run_button:
 
         # Combined export
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                    letter-spacing:4px; text-transform:uppercase; margin:1rem 0 0.5rem 0;">
-          ── SWEEP REPORT EXPORT
+        <div style="font-family:'Inter',sans-serif; font-size:0.8rem; font-weight:600;
+                    color:{WHITE}; margin:1rem 0 0.5rem 0;">
+          Export full sweep report
         </div>
         """, unsafe_allow_html=True)
         _sweep_export = build_sweep_export(sweep_scenario_name, sweep_results)
         st.download_button(
-            label="↓  EXPORT COMBINED SWEEP REPORT (JSON)",
+            label="Download combined sweep report (JSON)",
             data=json.dumps(_sweep_export, indent=2),
             file_name=f"swarm_sweep_{sweep_scenario_name.lower().replace(' ', '_')}.json",
             mime="application/json",
@@ -1317,9 +1315,9 @@ if run_button:
 
     # ── Scenario metric panels ────────────────────────────────────────────
     st.markdown(f"""
-    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                letter-spacing:4px; text-transform:uppercase; margin-bottom:0.75rem;">
-      ── SCENARIO COMPARISON
+    <div style="font-family:'Inter',sans-serif; font-size:1rem; font-weight:700;
+                color:{WHITE}; margin-bottom:0.75rem;">
+      Scenario Comparison
     </div>
     """, unsafe_allow_html=True)
 
@@ -1334,43 +1332,43 @@ if run_button:
 
     with col_a:
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
-                    color:{NEON}; letter-spacing:3px; text-transform:uppercase;
-                    margin-bottom:0.5rem; border-left:3px solid {NEON}; padding-left:0.75rem;">
-          SCENARIO A · {scenario_a_name.upper()}
+        <div style="font-family:'Inter',sans-serif; font-size:0.875rem; font-weight:700;
+                    color:{NEON}; margin-bottom:0.5rem;
+                    border-left:3px solid {NEON}; padding-left:0.75rem;">
+          Scenario A &mdash; {scenario_a_name}
         </div>
         """, unsafe_allow_html=True)
         r1, r2, r3, r4 = st.columns(4)
         r1.metric("Time in Range", f"{summary_a.percent_time_in_range:.1f}%")
-        r2.metric("Avg CGM", f"{summary_a.average_cgm_glucose_mgdl:.0f}")
-        r3.metric("Peak CGM", f"{summary_a.peak_cgm_glucose_mgdl:.0f}")
-        r4.metric("Above 250", f"{summary_a.time_above_250_steps} steps")
+        r2.metric("Average glucose", f"{summary_a.average_cgm_glucose_mgdl:.0f} mg/dL")
+        r3.metric("Peak glucose", f"{summary_a.peak_cgm_glucose_mgdl:.0f} mg/dL")
+        r4.metric("Above 250 mg/dL", f"{summary_a.time_above_250_steps} readings")
         r5, r6, r7, r8, r9 = st.columns(5)
-        r5.metric("Recommended U", f"{summary_a.total_recommended_insulin_u:.2f}")
-        r6.metric("Delivered U", f"{summary_a.total_insulin_delivered_u:.2f}")
-        r7.metric("Blocked", summary_a.blocked_decisions)
-        r8.metric("Clipped", summary_a.clipped_decisions)
-        r9.metric("Suspended", summary_a.time_suspended_steps)
+        r5.metric("Calculated dose (U)", f"{summary_a.total_recommended_insulin_u:.2f}")
+        r6.metric("Delivered (U)", f"{summary_a.total_insulin_delivered_u:.2f}")
+        r7.metric("Doses withheld", summary_a.blocked_decisions)
+        r8.metric("Doses capped", summary_a.clipped_decisions)
+        r9.metric("Dosing paused", summary_a.time_suspended_steps)
 
     with col_b:
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
-                    color:{CYAN}; letter-spacing:3px; text-transform:uppercase;
-                    margin-bottom:0.5rem; border-left:3px solid {CYAN}; padding-left:0.75rem;">
-          SCENARIO B · {scenario_b_name.upper()}
+        <div style="font-family:'Inter',sans-serif; font-size:0.875rem; font-weight:700;
+                    color:{CYAN}; margin-bottom:0.5rem;
+                    border-left:3px solid {CYAN}; padding-left:0.75rem;">
+          Scenario B &mdash; {scenario_b_name}
         </div>
         """, unsafe_allow_html=True)
         r1, r2, r3, r4 = st.columns(4)
         r1.metric("Time in Range", f"{summary_b.percent_time_in_range:.1f}%")
-        r2.metric("Avg CGM", f"{summary_b.average_cgm_glucose_mgdl:.0f}")
-        r3.metric("Peak CGM", f"{summary_b.peak_cgm_glucose_mgdl:.0f}")
-        r4.metric("Above 250", f"{summary_b.time_above_250_steps} steps")
+        r2.metric("Average glucose", f"{summary_b.average_cgm_glucose_mgdl:.0f} mg/dL")
+        r3.metric("Peak glucose", f"{summary_b.peak_cgm_glucose_mgdl:.0f} mg/dL")
+        r4.metric("Above 250 mg/dL", f"{summary_b.time_above_250_steps} readings")
         r5, r6, r7, r8, r9 = st.columns(5)
-        r5.metric("Recommended U", f"{summary_b.total_recommended_insulin_u:.2f}")
-        r6.metric("Delivered U", f"{summary_b.total_insulin_delivered_u:.2f}")
-        r7.metric("Blocked", summary_b.blocked_decisions)
-        r8.metric("Clipped", summary_b.clipped_decisions)
-        r9.metric("Suspended", summary_b.time_suspended_steps)
+        r5.metric("Calculated dose (U)", f"{summary_b.total_recommended_insulin_u:.2f}")
+        r6.metric("Delivered (U)", f"{summary_b.total_insulin_delivered_u:.2f}")
+        r7.metric("Doses withheld", summary_b.blocked_decisions)
+        r8.metric("Doses capped", summary_b.clipped_decisions)
+        r9.metric("Dosing paused", summary_b.time_suspended_steps)
 
     st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
@@ -1398,19 +1396,19 @@ if run_button:
     )
 
     # ── Metrics table ─────────────────────────────────────────────────────
-    with st.expander("CLINICAL METRICS TABLE", expanded=False):
+    with st.expander("Clinical metrics table", expanded=False):
         compare_df = pd.DataFrame({
             "Metric": [
-                "Time in Range %",
-                "Average CGM (mg/dL)",
-                "Peak CGM (mg/dL)",
-                "Time Above 250 (steps)",
-                "Glucose Variability SD",
-                "Recommended Insulin (U)",
-                "Delivered Insulin (U)",
-                "Blocked Decisions",
-                "Clipped Decisions",
-                "Allowed Decisions",
+                "Time in Range (%)",
+                "Average glucose (mg/dL)",
+                "Peak glucose (mg/dL)",
+                "Time above 250 mg/dL (readings)",
+                "Glucose variability — SD (mg/dL)",
+                "Algorithm-calculated dose (U)",
+                "Insulin delivered (U)",
+                "Doses withheld",
+                "Doses capped at safety limit",
+                "Doses approved",
             ],
             "Scenario A": [
                 summary_a.percent_time_in_range,
@@ -1444,25 +1442,25 @@ if run_button:
 
     if summary_a.percent_time_in_range > summary_b.percent_time_in_range:
         verdict_lines.append(
-            f"[TIR]   A outperforms B on glycemic control "
-            f"({summary_a.percent_time_in_range:.1f}% vs {summary_b.percent_time_in_range:.1f}% in range)."
+            f"Time in Range:  Scenario A achieves better glycaemic control "
+            f"({summary_a.percent_time_in_range:.1f}% vs {summary_b.percent_time_in_range:.1f}% time in range)."
         )
     elif summary_b.percent_time_in_range > summary_a.percent_time_in_range:
         verdict_lines.append(
-            f"[TIR]   B outperforms A on glycemic control "
-            f"({summary_b.percent_time_in_range:.1f}% vs {summary_a.percent_time_in_range:.1f}% in range)."
+            f"Time in Range:  Scenario B achieves better glycaemic control "
+            f"({summary_b.percent_time_in_range:.1f}% vs {summary_a.percent_time_in_range:.1f}% time in range)."
         )
     else:
-        verdict_lines.append("[TIR]   Both scenarios achieve identical time-in-range.")
+        verdict_lines.append("Time in Range:  Both scenarios achieve identical time-in-range.")
 
     if summary_b.peak_cgm_glucose_mgdl > summary_a.peak_cgm_glucose_mgdl + 10:
         verdict_lines.append(
-            f"[PEAK]  B exhibits higher excursion risk "
+            f"Peak glucose:   Scenario B has a higher post-prandial excursion "
             f"(peak {summary_b.peak_cgm_glucose_mgdl:.0f} vs {summary_a.peak_cgm_glucose_mgdl:.0f} mg/dL)."
         )
     elif summary_a.peak_cgm_glucose_mgdl > summary_b.peak_cgm_glucose_mgdl + 10:
         verdict_lines.append(
-            f"[PEAK]  A exhibits higher excursion risk "
+            f"Peak glucose:   Scenario A has a higher post-prandial excursion "
             f"(peak {summary_a.peak_cgm_glucose_mgdl:.0f} vs {summary_b.peak_cgm_glucose_mgdl:.0f} mg/dL)."
         )
 
@@ -1470,28 +1468,28 @@ if run_button:
     ints_b = summary_b.blocked_decisions + summary_b.clipped_decisions
     if ints_b > ints_a:
         verdict_lines.append(
-            f"[SAFETY] B triggers more safety interventions ({ints_b} vs {ints_a}), "
-            f"indicating greater constraint pressure on dosing."
+            f"Safety checks:  Scenario B required more safety interventions ({ints_b} vs {ints_a}), "
+            f"reflecting greater dosing constraint pressure."
         )
     elif ints_a > ints_b:
         verdict_lines.append(
-            f"[SAFETY] A triggers more safety interventions ({ints_a} vs {ints_b})."
+            f"Safety checks:  Scenario A required more safety interventions ({ints_a} vs {ints_b})."
         )
 
     if summary_b.total_insulin_delivered_u > summary_a.total_insulin_delivered_u * 1.15:
         verdict_lines.append(
-            f"[INSULIN] B requires {summary_b.total_insulin_delivered_u - summary_a.total_insulin_delivered_u:.2f} U "
-            f"more insulin than A."
+            f"Insulin use:    Scenario B required "
+            f"{summary_b.total_insulin_delivered_u - summary_a.total_insulin_delivered_u:.2f} U more insulin than Scenario A."
         )
 
     if summary_a.glucose_variability_sd_mgdl < summary_b.glucose_variability_sd_mgdl:
         verdict_lines.append(
-            f"[VAR]   A shows lower glycemic variability "
+            f"Variability:    Scenario A shows lower glucose variability "
             f"(SD {summary_a.glucose_variability_sd_mgdl:.1f} vs {summary_b.glucose_variability_sd_mgdl:.1f} mg/dL)."
         )
 
     if not verdict_lines:
-        verdict_lines.append("[INFO]  Both scenarios behave similarly under current constraints.")
+        verdict_lines.append("Both scenarios perform similarly under the current settings.")
 
     # Pre-build reports so download buttons are always available after a run
     _report_a = generate_report(
@@ -1519,46 +1517,46 @@ if run_button:
 
     # ── Export ────────────────────────────────────────────────────────────
     st.markdown(f"""
-    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                letter-spacing:4px; text-transform:uppercase; margin:1.5rem 0 0.5rem 0;">
-      ── VALIDATION REPORT EXPORT
+    <div style="font-family:'Inter',sans-serif; font-size:0.8rem; font-weight:600;
+                color:{WHITE}; margin:1.5rem 0 0.5rem 0;">
+      Validation report export
     </div>
     """, unsafe_allow_html=True)
     _exp_a, _exp_b = st.columns(2)
     with _exp_a:
-        _pass_a = "✓ PASS" if _report_a["verdicts"]["overall_pass"] else "✗ FAIL"
+        _pass_a = "✓ Meets targets" if _report_a["verdicts"]["overall_pass"] else "✗ Outside targets"
         _color_a = NEON if _report_a["verdicts"]["overall_pass"] else RED
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+        <div style="font-family:'Inter',sans-serif; font-size:0.82rem;
                     color:{_color_a}; margin-bottom:0.4rem;">
-          Scenario A · {_pass_a}
+          Scenario A &mdash; {_pass_a}
           &nbsp;·&nbsp; TIR {"✓" if _report_a["verdicts"]["tir_pass"] else "✗"}
           &nbsp;·&nbsp; Peak {"✓" if _report_a["verdicts"]["peak_pass"] else "✗"}
           &nbsp;·&nbsp; Hypo {"✓" if _report_a["verdicts"]["hypo_pass"] else "✗"}
-          &nbsp;·&nbsp; SD {"✓" if _report_a["verdicts"]["variability_pass"] else "✗"}
+          &nbsp;·&nbsp; Variability {"✓" if _report_a["verdicts"]["variability_pass"] else "✗"}
         </div>
         """, unsafe_allow_html=True)
         st.download_button(
-            label="↓  EXPORT SCENARIO A REPORT",
+            label="Download Scenario A report (JSON)",
             data=json.dumps(_report_a, indent=2),
             file_name=f"swarm_report_A_{scenario_a_name.lower().replace(' ', '_')}.json",
             mime="application/json",
         )
     with _exp_b:
-        _pass_b = "✓ PASS" if _report_b["verdicts"]["overall_pass"] else "✗ FAIL"
+        _pass_b = "✓ Meets targets" if _report_b["verdicts"]["overall_pass"] else "✗ Outside targets"
         _color_b = NEON if _report_b["verdicts"]["overall_pass"] else RED
         st.markdown(f"""
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+        <div style="font-family:'Inter',sans-serif; font-size:0.82rem;
                     color:{_color_b}; margin-bottom:0.4rem;">
-          Scenario B · {_pass_b}
+          Scenario B &mdash; {_pass_b}
           &nbsp;·&nbsp; TIR {"✓" if _report_b["verdicts"]["tir_pass"] else "✗"}
           &nbsp;·&nbsp; Peak {"✓" if _report_b["verdicts"]["peak_pass"] else "✗"}
           &nbsp;·&nbsp; Hypo {"✓" if _report_b["verdicts"]["hypo_pass"] else "✗"}
-          &nbsp;·&nbsp; SD {"✓" if _report_b["verdicts"]["variability_pass"] else "✗"}
+          &nbsp;·&nbsp; Variability {"✓" if _report_b["verdicts"]["variability_pass"] else "✗"}
         </div>
         """, unsafe_allow_html=True)
         st.download_button(
-            label="↓  EXPORT SCENARIO B REPORT",
+            label="Download Scenario B report (JSON)",
             data=json.dumps(_report_b, indent=2),
             file_name=f"swarm_report_B_{scenario_b_name.lower().replace(' ', '_')}.json",
             mime="application/json",
@@ -1588,16 +1586,16 @@ if run_button:
         step_minutes=step_minutes,
     )
     st.markdown(f"""
-    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                letter-spacing:4px; text-transform:uppercase; margin:1.5rem 0 0.25rem 0;">
-      ── SCENARIO A · DECISION TIMELINE
+    <div style="font-family:'Inter',sans-serif; font-size:0.8rem; font-weight:600;
+                color:{WHITE}; margin:1.5rem 0 0.25rem 0;">
+      Scenario A &mdash; Decision log
     </div>
     """, unsafe_allow_html=True)
     decision_timeline_panel(_exps_a, key_suffix="comp_a")
     st.markdown(f"""
-    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                letter-spacing:4px; text-transform:uppercase; margin:0.75rem 0 0.25rem 0;">
-      ── SCENARIO B · DECISION TIMELINE
+    <div style="font-family:'Inter',sans-serif; font-size:0.8rem; font-weight:600;
+                color:{WHITE}; margin:0.75rem 0 0.25rem 0;">
+      Scenario B &mdash; Decision log
     </div>
     """, unsafe_allow_html=True)
     decision_timeline_panel(_exps_b, key_suffix="comp_b")
