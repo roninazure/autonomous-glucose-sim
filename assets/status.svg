@@ -6,8 +6,6 @@
       .blink-a { animation: blinkA 2.5s ease-in-out infinite; }
       @keyframes blinkG { 0%,100%{opacity:1} 50%{opacity:0.3} }
       @keyframes blinkA { 0%,100%{opacity:0.8} 50%{opacity:0.2} }
-
-      .card { transition: opacity 0.3s; }
       .fade-n { animation: fn 0.4s ease both; }
       @keyframes fn { from{opacity:0} to{opacity:1} }
       .d1{animation-delay:0.1s} .d2{animation-delay:0.25s} .d3{animation-delay:0.4s}
@@ -30,10 +28,9 @@
   <text x="430" y="22" font-size="9" fill="#39ff14" opacity="0.3" text-anchor="middle" letter-spacing="4">BUILD STATUS · SWARM BOLUS</text>
   <line x1="40" y1="30" x2="820" y2="30" stroke="#39ff14" stroke-width="0.4" opacity="0.15"/>
 
-  <!-- ── CARDS ── 3 complete, 3 WIP, 3 roadmap -->
-  <!-- Card W=86, gap=10, 9 cards, total = 9*86+8*10 = 774+80 = 854, start x=3 -->
+  <!-- Card W=86, gap=10, 9 cards. Positions: 3, 99, 195, 291, 387, 483, 579, 675, 771 -->
 
-  <!-- Card 1: Architecture COMPLETE -->
+  <!-- Card 1: Arch Design COMPLETE -->
   <g class="fade-n d1">
     <rect x="3" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
     <rect x="3" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
@@ -68,76 +65,76 @@
     <text x="238" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
     <line x1="208" y1="116" x2="268" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
     <text x="238" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">CTRL</text>
-    <text x="238" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">PHASE 3</text>
+    <text x="238" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ENGINE</text>
     <text x="238" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
   </g>
 
-  <!-- Card 4: Safety IN PROGRESS -->
+  <!-- Card 4: Safety Layer COMPLETE (was IN PROGRESS) -->
   <g class="fade-n d4">
-    <rect x="291" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#ffb347" stroke-width="0.8" opacity="0.8"/>
-    <rect x="291" y="44" width="86" height="3" fill="#ffb347" opacity="0.7"/>
-    <circle class="blink-a" cx="334" cy="80" r="8" fill="none" stroke="#ffb347" stroke-width="1.5"/>
-    <circle class="blink-a" cx="334" cy="80" r="4" fill="#ffb347"/>
-    <text x="334" y="104" font-size="7.5" fill="#ffb347" opacity="0.9" text-anchor="middle">IN PROGRESS</text>
-    <line x1="304" y1="116" x2="364" y2="116" stroke="#ffb347" stroke-width="0.3" opacity="0.2"/>
-    <text x="334" y="132" font-size="8" fill="#ffb347" opacity="0.55" text-anchor="middle">SAFETY</text>
-    <text x="334" y="147" font-size="7.5" fill="#ffb347" opacity="0.35" text-anchor="middle">LAYER</text>
-    <text x="334" y="174" font-size="22" fill="#ffb347" opacity="0.07" text-anchor="middle">◐</text>
+    <rect x="291" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="291" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="334" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="334" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="334" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="304" y1="116" x2="364" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="334" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">SAFETY</text>
+    <text x="334" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">LAYER</text>
+    <text x="334" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
   </g>
 
-  <!-- Card 5: Pump IN PROGRESS -->
+  <!-- Card 5: Pump Abstraction COMPLETE (was IN PROGRESS) -->
   <g class="fade-n d5">
-    <rect x="387" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#ffb347" stroke-width="0.8" opacity="0.8"/>
-    <rect x="387" y="44" width="86" height="3" fill="#ffb347" opacity="0.7"/>
-    <circle class="blink-a" cx="430" cy="80" r="8" fill="none" stroke="#ffb347" stroke-width="1.5"/>
-    <circle class="blink-a" cx="430" cy="80" r="4" fill="#ffb347"/>
-    <text x="430" y="104" font-size="7.5" fill="#ffb347" opacity="0.9" text-anchor="middle">IN PROGRESS</text>
-    <line x1="400" y1="116" x2="460" y2="116" stroke="#ffb347" stroke-width="0.3" opacity="0.2"/>
-    <text x="430" y="132" font-size="8" fill="#ffb347" opacity="0.55" text-anchor="middle">PUMP</text>
-    <text x="430" y="147" font-size="7.5" fill="#ffb347" opacity="0.35" text-anchor="middle">ABSTRACTION</text>
-    <text x="430" y="174" font-size="22" fill="#ffb347" opacity="0.07" text-anchor="middle">◐</text>
+    <rect x="387" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="387" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="430" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="430" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="430" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="400" y1="116" x2="460" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="430" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">EVAL</text>
+    <text x="430" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ENGINE</text>
+    <text x="430" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
   </g>
 
-  <!-- Card 6: Evaluation IN PROGRESS -->
+  <!-- Card 6: Retro Replay COMPLETE (was EVAL ENGINE IN PROGRESS) -->
   <g class="fade-n d6">
-    <rect x="483" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#ffb347" stroke-width="0.8" opacity="0.8"/>
-    <rect x="483" y="44" width="86" height="3" fill="#ffb347" opacity="0.7"/>
-    <circle class="blink-a" cx="526" cy="80" r="8" fill="none" stroke="#ffb347" stroke-width="1.5"/>
-    <circle class="blink-a" cx="526" cy="80" r="4" fill="#ffb347"/>
-    <text x="526" y="104" font-size="7.5" fill="#ffb347" opacity="0.9" text-anchor="middle">IN PROGRESS</text>
-    <line x1="496" y1="116" x2="556" y2="116" stroke="#ffb347" stroke-width="0.3" opacity="0.2"/>
-    <text x="526" y="132" font-size="8" fill="#ffb347" opacity="0.55" text-anchor="middle">EVAL</text>
-    <text x="526" y="147" font-size="7.5" fill="#ffb347" opacity="0.35" text-anchor="middle">ENGINE</text>
-    <text x="526" y="174" font-size="22" fill="#ffb347" opacity="0.07" text-anchor="middle">◐</text>
+    <rect x="483" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="483" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="526" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="526" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="526" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="496" y1="116" x2="556" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="526" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">RETRO</text>
+    <text x="526" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">REPLAY</text>
+    <text x="526" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
   </g>
 
-  <!-- Card 7: Risk Score ROADMAP -->
+  <!-- Card 7: Explainability COMPLETE (was RISK SCORING ROADMAP) -->
   <g class="fade-n d7">
-    <rect x="579" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.4" opacity="0.4"/>
-    <rect x="579" y="44" width="86" height="3" fill="#39ff14" opacity="0.2"/>
-    <circle cx="622" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="0.8" opacity="0.3"/>
-    <circle cx="622" cy="80" r="2" fill="#39ff14" opacity="0.3"/>
-    <text x="622" y="104" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ROADMAP</text>
-    <line x1="592" y1="116" x2="652" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.1"/>
-    <text x="622" y="132" font-size="8" fill="#39ff14" opacity="0.3" text-anchor="middle">RISK</text>
-    <text x="622" y="147" font-size="7.5" fill="#39ff14" opacity="0.2" text-anchor="middle">SCORING</text>
-    <text x="622" y="174" font-size="22" fill="#39ff14" opacity="0.04" text-anchor="middle">○</text>
+    <rect x="579" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="579" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="622" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="622" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="622" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="592" y1="116" x2="652" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="622" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">EXPLAIN</text>
+    <text x="622" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ABILITY</text>
+    <text x="622" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
   </g>
 
-  <!-- Card 8: Dataset ROADMAP -->
+  <!-- Card 8: Design History IN PROGRESS (was DATASET VALIDATION ROADMAP) -->
   <g class="fade-n d8">
-    <rect x="675" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.4" opacity="0.4"/>
-    <rect x="675" y="44" width="86" height="3" fill="#39ff14" opacity="0.2"/>
-    <circle cx="718" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="0.8" opacity="0.3"/>
-    <circle cx="718" cy="80" r="2" fill="#39ff14" opacity="0.3"/>
-    <text x="718" y="104" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ROADMAP</text>
-    <line x1="688" y1="116" x2="748" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.1"/>
-    <text x="718" y="132" font-size="8" fill="#39ff14" opacity="0.3" text-anchor="middle">DATASET</text>
-    <text x="718" y="147" font-size="7.5" fill="#39ff14" opacity="0.2" text-anchor="middle">VALIDATION</text>
-    <text x="718" y="174" font-size="22" fill="#39ff14" opacity="0.04" text-anchor="middle">○</text>
+    <rect x="675" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#ffb347" stroke-width="0.8" opacity="0.8"/>
+    <rect x="675" y="44" width="86" height="3" fill="#ffb347" opacity="0.7"/>
+    <circle class="blink-a" cx="718" cy="80" r="8" fill="none" stroke="#ffb347" stroke-width="1.5"/>
+    <circle class="blink-a" cx="718" cy="80" r="4" fill="#ffb347"/>
+    <text x="718" y="104" font-size="7.5" fill="#ffb347" opacity="0.9" text-anchor="middle">IN PROGRESS</text>
+    <line x1="688" y1="116" x2="748" y2="116" stroke="#ffb347" stroke-width="0.3" opacity="0.2"/>
+    <text x="718" y="132" font-size="8" fill="#ffb347" opacity="0.55" text-anchor="middle">REG</text>
+    <text x="718" y="147" font-size="7.5" fill="#ffb347" opacity="0.35" text-anchor="middle">FILING</text>
+    <text x="718" y="174" font-size="22" fill="#ffb347" opacity="0.07" text-anchor="middle">◐</text>
   </g>
 
-  <!-- Card 9: Clinical ROADMAP -->
+  <!-- Card 9: Clinical Pilot ROADMAP -->
   <g class="fade-n d9">
     <rect x="771" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.4" opacity="0.4"/>
     <rect x="771" y="44" width="86" height="3" fill="#39ff14" opacity="0.2"/>
