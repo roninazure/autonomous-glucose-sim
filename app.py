@@ -35,17 +35,19 @@ from ags.simulation.scenarios import (
 from ags.simulation.state import MealEvent, SimulationInputs
 
 # ── Palette ─────────────────────────────────────────────────────────────────
-BG       = "#050a06"
-BG2      = "#0b140c"
-BG3      = "#0f1a10"
-NEON     = "#39ff14"
-NEON_DIM = "#1a6b09"
-RED      = "#ff4d6d"
-AMBER    = "#ffbe0b"
-CYAN     = "#00f5ff"
-WHITE    = "#d4ecd4"
-MUTED    = "#3d6b3d"
-GRID     = "#0d200d"
+# Clinical navy — professional, readable, easy on the eyes in low-light rooms.
+# Replaces the original electric-green hacker palette.
+BG       = "#0d1520"   # deep navy
+BG2      = "#152032"   # panel background
+BG3      = "#1c2d42"   # elevated surface
+NEON     = "#4ade80"   # soft clinical green (ADA in-range colour)
+NEON_DIM = "#166534"   # muted green border
+RED      = "#f87171"   # softer red for hypo/danger
+AMBER    = "#fbbf24"   # amber for hyperglycemia warning
+CYAN     = "#60a5fa"   # medical blue — secondary accent
+WHITE    = "#e2e8f0"   # clean off-white body text
+MUTED    = "#94a3b8"   # slate-grey muted text
+GRID     = "#1e3355"   # subtle chart gridlines
 
 # ── Page config (must be first Streamlit call) ───────────────────────────────
 st.set_page_config(
@@ -58,12 +60,13 @@ st.set_page_config(
 # ── Global CSS ───────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
+/* Base — Inter for readable prose, JetBrains Mono only for data values */
 html, body, [class*="css"] {{
     background-color: {BG} !important;
     color: {WHITE} !important;
-    font-family: 'Share Tech Mono', monospace !important;
+    font-family: 'Inter', sans-serif !important;
 }}
 
 /* Sidebar */
@@ -72,109 +75,128 @@ html, body, [class*="css"] {{
     border-right: 1px solid {NEON_DIM} !important;
 }}
 [data-testid="stSidebar"] * {{
-    font-family: 'Share Tech Mono', monospace !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.85rem !important;
 }}
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {{
-    color: {NEON} !important;
-    font-size: 0.65rem !important;
-    letter-spacing: 3px;
+    color: {CYAN} !important;
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
-    padding-bottom: 6px;
+    padding-bottom: 5px;
     border-bottom: 1px solid {NEON_DIM};
-    margin-top: 1.5rem !important;
+    margin-top: 1.4rem !important;
+}}
+/* Slider / selectbox labels */
+[data-testid="stSidebar"] label {{
+    color: {WHITE} !important;
+    font-size: 0.83rem !important;
+    font-weight: 500 !important;
 }}
 
 /* Primary button */
 [data-testid="stButton"] > button[kind="primary"] {{
-    background: transparent !important;
+    background: {NEON_DIM} !important;
     border: 1px solid {NEON} !important;
-    color: {NEON} !important;
-    font-family: 'Share Tech Mono', monospace !important;
-    font-size: 0.8rem !important;
-    letter-spacing: 4px;
-    text-transform: uppercase;
+    color: {WHITE} !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px;
     width: 100%;
-    padding: 0.65rem !important;
-    box-shadow: 0 0 12px {NEON_DIM};
+    padding: 0.7rem !important;
+    border-radius: 4px !important;
     transition: all 0.15s ease;
 }}
 [data-testid="stButton"] > button[kind="primary"]:hover {{
     background: {NEON} !important;
     color: {BG} !important;
-    box-shadow: 0 0 24px {NEON};
 }}
 
 /* Metrics */
 [data-testid="metric-container"] {{
     background-color: {BG2} !important;
     border: 1px solid {NEON_DIM} !important;
-    border-radius: 3px !important;
-    padding: 10px 14px !important;
+    border-radius: 6px !important;
+    padding: 12px 16px !important;
 }}
 [data-testid="stMetricValue"] {{
     color: {NEON} !important;
-    font-family: 'Share Tech Mono', monospace !important;
-    font-size: 1.3rem !important;
-    text-shadow: 0 0 8px {NEON_DIM};
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 1.4rem !important;
+    font-weight: 500 !important;
 }}
 [data-testid="stMetricLabel"] {{
     color: {MUTED} !important;
-    font-size: 0.6rem !important;
-    letter-spacing: 2px;
-    text-transform: uppercase;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.3px;
 }}
 
 /* Dataframe */
 [data-testid="stDataFrame"] {{
     border: 1px solid {NEON_DIM} !important;
+    border-radius: 4px !important;
 }}
 [data-testid="stDataFrame"] th {{
     background-color: {BG3} !important;
-    color: {NEON} !important;
-    font-family: 'Share Tech Mono', monospace !important;
-    font-size: 0.7rem !important;
-    letter-spacing: 2px;
-    text-transform: uppercase;
+    color: {CYAN} !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.3px;
 }}
 [data-testid="stDataFrame"] td {{
-    font-family: 'Share Tech Mono', monospace !important;
-    font-size: 0.8rem !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.82rem !important;
     color: {WHITE} !important;
 }}
 
 /* Plotly containers */
 [data-testid="stPlotlyChart"] {{
     border: 1px solid {NEON_DIM};
-    border-radius: 3px;
+    border-radius: 6px;
     overflow: hidden;
 }}
 
-/* Info box */
+/* Info / alert box */
 [data-testid="stAlert"] {{
     background-color: {BG2} !important;
     border: 1px solid {NEON_DIM} !important;
     color: {WHITE} !important;
-    font-family: 'Share Tech Mono', monospace !important;
-    font-size: 0.8rem !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.85rem !important;
+    border-radius: 4px !important;
+}}
+
+/* Expander */
+[data-testid="stExpander"] summary {{
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    color: {CYAN} !important;
 }}
 
 /* Scrollbar */
 ::-webkit-scrollbar {{ width: 5px; height: 5px; }}
 ::-webkit-scrollbar-track {{ background: {BG}; }}
-::-webkit-scrollbar-thumb {{ background: {NEON_DIM}; border-radius: 2px; }}
+::-webkit-scrollbar-thumb {{ background: {NEON_DIM}; border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {NEON}; }}
 
 /* Divider */
-hr {{ border-color: {NEON_DIM} !important; opacity: 0.5; }}
+hr {{ border-color: {NEON_DIM} !important; opacity: 0.4; }}
 
 /* Section labels */
 .section-label {{
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 0.6rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
     color: {MUTED};
-    letter-spacing: 4px;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
     margin-bottom: 0.5rem;
 }}
@@ -187,7 +209,7 @@ def _layout(title: str = "", height: int = 320) -> dict:
     return dict(
         title=dict(
             text=title,
-            font=dict(family="Share Tech Mono", size=11, color=NEON),
+            font=dict(family="Inter", size=12, color=WHITE),
             x=0,
             pad=dict(l=0, t=4),
         ),
@@ -195,28 +217,28 @@ def _layout(title: str = "", height: int = 320) -> dict:
         margin=dict(l=55, r=20, t=44, b=44),
         plot_bgcolor=BG,
         paper_bgcolor=BG2,
-        font=dict(family="Share Tech Mono", color=WHITE, size=10),
+        font=dict(family="Inter", color=WHITE, size=11),
         xaxis=dict(
             gridcolor=GRID,
             linecolor=NEON_DIM,
             tickcolor=NEON_DIM,
-            tickfont=dict(color=MUTED, size=9),
-            title_font=dict(color=MUTED, size=9),
+            tickfont=dict(color=MUTED, size=10),
+            title_font=dict(color=MUTED, size=11),
             zeroline=False,
         ),
         yaxis=dict(
             gridcolor=GRID,
             linecolor=NEON_DIM,
             tickcolor=NEON_DIM,
-            tickfont=dict(color=MUTED, size=9),
-            title_font=dict(color=MUTED, size=9),
+            tickfont=dict(color=MUTED, size=10),
+            title_font=dict(color=MUTED, size=11),
             zeroline=False,
         ),
         legend=dict(
             bgcolor=BG,
             bordercolor=NEON_DIM,
             borderwidth=1,
-            font=dict(family="Share Tech Mono", size=9, color=WHITE),
+            font=dict(family="Inter", size=11, color=WHITE),
             orientation="h",
             yanchor="bottom",
             y=1.02,
@@ -238,11 +260,11 @@ def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
     )
     # Threshold lines
     fig.add_hline(y=70, line=dict(color=RED, width=1, dash="dot"),
-                  annotation=dict(text="HYPO 70", font=dict(color=RED, size=8), xanchor="left"))
+                  annotation=dict(text="Hypo  70", font=dict(color=RED, size=9, family="Inter"), xanchor="left"))
     fig.add_hline(y=180, line=dict(color=AMBER, width=1, dash="dot"),
-                  annotation=dict(text="HYPER 180", font=dict(color=AMBER, size=8), xanchor="left"))
+                  annotation=dict(text="High  180", font=dict(color=AMBER, size=9, family="Inter"), xanchor="left"))
     fig.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
-                  annotation=dict(text="SEVERE 250", font=dict(color=RED, size=8), xanchor="left"))
+                  annotation=dict(text="Very High  250", font=dict(color=RED, size=9, family="Inter"), xanchor="left"))
 
     fig.add_trace(go.Scatter(
         x=df_a["timestamp_min"], y=df_a["cgm_glucose_mgdl"],
@@ -257,7 +279,7 @@ def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
         hovertemplate="%{y:.1f} mg/dL<extra>B</extra>",
     ))
 
-    layout = _layout("CGM TRAJECTORY", height=360)
+    layout = _layout("Glucose Trace (mg/dL)", height=360)
     layout["yaxis"]["title"] = "mg/dL"
     layout["xaxis"]["title"] = "minutes"
     fig.update_layout(**layout)
@@ -290,9 +312,9 @@ def insulin_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: s
         hovertemplate="%{y:.3f} U<extra>B Recommended</extra>",
     ))
 
-    layout = _layout("INSULIN DELIVERY", height=280)
-    layout["yaxis"]["title"] = "units"
-    layout["xaxis"]["title"] = "minutes"
+    layout = _layout("Insulin Delivered (units)", height=280)
+    layout["yaxis"]["title"] = "Units"
+    layout["xaxis"]["title"] = "Time (minutes)"
     layout["barmode"] = "overlay"
     fig.update_layout(**layout)
     return fig
@@ -316,9 +338,9 @@ def iob_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
         hovertemplate="%{y:.3f} U<extra>B IOB</extra>",
     ))
 
-    layout = _layout("INSULIN ON BOARD", height=240)
-    layout["yaxis"]["title"] = "IOB (U)"
-    layout["xaxis"]["title"] = "minutes"
+    layout = _layout("Active Insulin on Board (IOB)", height=240)
+    layout["yaxis"]["title"] = "Units active"
+    layout["xaxis"]["title"] = "Time (minutes)"
     fig.update_layout(**layout)
     return fig
 
@@ -344,8 +366,8 @@ def safety_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: st
                 hovertemplate="t=%{x} min — CLIPPED<extra>" + label + "</extra>",
             ))
 
-    layout = _layout("SAFETY INTERVENTIONS", height=200)
-    layout["xaxis"]["title"] = "minutes"
+    layout = _layout("Safety Interventions", height=200)
+    layout["xaxis"]["title"] = "Time (minutes)"
     layout["yaxis"]["categoryorder"] = "array"
     layout["yaxis"]["categoryarray"] = ["B", "A"]
     layout["margin"]["l"] = 40
@@ -500,45 +522,142 @@ def build_scenario(name: str) -> SimulationInputs:
 
 # ── Header ───────────────────────────────────────────────────────────────────
 st.markdown(f"""
-<div style="padding:2rem 0 1.5rem 0; border-bottom:1px solid {NEON_DIM}; margin-bottom:2rem;">
-  <div style="font-family:'Orbitron',monospace; font-size:2.2rem; font-weight:900;
-              color:{NEON}; letter-spacing:10px; text-transform:uppercase;
-              text-shadow:0 0 20px {NEON}, 0 0 60px {NEON_DIM}; line-height:1;">
-    ⬡ SWARM BOLUS
+<div style="padding:1.75rem 0 1.25rem 0; border-bottom:2px solid {NEON_DIM}; margin-bottom:1.75rem;">
+  <div style="display:flex; align-items:baseline; gap:0.9rem; flex-wrap:wrap;">
+    <div style="font-family:'Inter',sans-serif; font-size:1.9rem; font-weight:700;
+                color:{NEON}; line-height:1; letter-spacing:-0.5px;">
+      SWARM Bolus
+    </div>
+    <div style="font-family:'Inter',sans-serif; font-size:0.9rem; font-weight:400;
+                color:{MUTED}; letter-spacing:0px;">
+      Autonomous Insulin Dosing Simulation
+    </div>
   </div>
-  <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem;
-              color:{MUTED}; letter-spacing:5px; margin-top:0.5rem; text-transform:uppercase;">
-    Autonomous Glucose Simulation · 2-Compartment PK/PD · Gamma Gut Model · 1-min CGM
+  <div style="font-family:'Inter',sans-serif; font-size:0.82rem;
+              color:{MUTED}; margin-top:0.4rem;">
+    2-compartment PK/PD insulin model · Gamma gut absorption · 1-min or 5-min CGM loop
   </div>
-  <div style="margin-top:1rem; display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
-    <span style="background:{BG2}; border:1px solid {RED}; color:{RED};
-                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
-                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
-      ⚠ SIMULATION ONLY — NOT CLINICAL SOFTWARE
+  <div style="margin-top:0.9rem; display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center;">
+    <span style="background:rgba(248,113,113,0.12); border:1px solid {RED}; color:{RED};
+                 padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
+                 border-radius:4px; font-weight:500;">
+      ⚠ Research simulation — not for clinical use
     </span>
-    <span style="background:{BG2}; border:1px solid {NEON_DIM}; color:{NEON};
-                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
-                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
-      ◉ IOB FEEDBACK ACTIVE
+    <span style="background:rgba(74,222,128,0.1); border:1px solid {NEON_DIM}; color:{NEON};
+                 padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
+                 border-radius:4px; font-weight:500;">
+      ✓ Active insulin tracking (IOB)
     </span>
-    <span style="background:{BG2}; border:1px solid {NEON_DIM}; color:{NEON};
-                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
-                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
-      ◉ SAFETY LAYER ENABLED
+    <span style="background:rgba(74,222,128,0.1); border:1px solid {NEON_DIM}; color:{NEON};
+                 padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
+                 border-radius:4px; font-weight:500;">
+      ✓ Multi-layer safety checks
     </span>
-    <span style="background:{BG2}; border:1px solid {CYAN}; color:{CYAN};
-                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
-                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
-      ◉ DUAL-WAVE BOLUS
+    <span style="background:rgba(96,165,250,0.1); border:1px solid {CYAN}; color:{CYAN};
+                 padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
+                 border-radius:4px; font-weight:500;">
+      ✓ Split bolus delivery
     </span>
-    <span style="background:{BG2}; border:1px solid {CYAN}; color:{CYAN};
-                 padding:3px 12px; font-size:0.6rem; letter-spacing:2px;
-                 font-family:'Share Tech Mono',monospace; text-transform:uppercase;">
-      ◉ RoR-TIERED MICRO-BOLUS
+    <span style="background:rgba(96,165,250,0.1); border:1px solid {CYAN}; color:{CYAN};
+                 padding:3px 10px; font-size:0.72rem; font-family:'Inter',sans-serif;
+                 border-radius:4px; font-weight:500;">
+      ✓ Rise-rate–scaled dosing
     </span>
   </div>
 </div>
 """, unsafe_allow_html=True)
+
+# ── Algorithm Innovations panel ──────────────────────────────────────────────
+with st.expander("Clinical Algorithm Features", expanded=False):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown(f"""
+<div style="font-family:'Inter',sans-serif; font-size:0.72rem; font-weight:700;
+            color:{CYAN}; text-transform:uppercase; letter-spacing:0.5px;
+            margin-bottom:0.4rem; margin-top:0.25rem;">
+  1 · 1-Minute CGM Loop
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.85rem; color:{WHITE};
+            line-height:1.7; margin-bottom:1rem;">
+  Runs at <strong style="color:{NEON};">1-minute intervals</strong>, matching FreeStyle Libre's
+  native sampling rate. Detection thresholds are expressed in
+  <strong style="color:{NEON};">mg/dL per minute</strong> so the algorithm behaves
+  identically whether the loop runs at 1-min or 5-min cadence.<br/>
+  <span style="color:{MUTED}; font-size:0.78rem;">Set in sidebar: Simulation → CGM reading interval = 1 min</span>
+</div>
+
+<div style="font-family:'Inter',sans-serif; font-size:0.72rem; font-weight:700;
+            color:{CYAN}; text-transform:uppercase; letter-spacing:0.5px;
+            margin-bottom:0.4rem;">
+  2 · Split Delivery (Dual-Wave Bolus)
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.85rem; color:{WHITE};
+            line-height:1.7; margin-bottom:0.5rem;">
+  Mimics a <strong style="color:{NEON};">combo / dual-wave bolus</strong> as used on
+  clinical pumps. Each correction is split into an
+  <strong>immediate portion</strong> (covers the initial spike) and an
+  <strong>extended tail</strong> dripped evenly over a configurable window.
+</div>
+<div style="background:{BG3}; border-left:3px solid {CYAN}; padding:0.5rem 0.9rem;
+            font-family:'Inter',sans-serif; font-size:0.82rem;
+            color:{MUTED}; line-height:1.6; margin-bottom:0.5rem; border-radius:0 4px 4px 0;">
+  Example: 30 g carbs → 6 units total → <strong style="color:{WHITE};">2 U now + 4 U over 20 min</strong>
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.78rem; color:{MUTED};">
+  Set in sidebar: Split Delivery → Enable, then adjust fraction &amp; duration
+</div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+<div style="font-family:'Inter',sans-serif; font-size:0.72rem; font-weight:700;
+            color:{CYAN}; text-transform:uppercase; letter-spacing:0.5px;
+            margin-bottom:0.4rem; margin-top:0.25rem;">
+  3 · Smart Dose Scaling (Rise-Rate Tiers)
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.85rem; color:{WHITE};
+            line-height:1.7; margin-bottom:0.5rem;">
+  The correction dose is scaled automatically based on how fast glucose
+  is rising — no fixed fraction needed.
+</div>
+<div style="background:{BG3}; border:1px solid {NEON_DIM}; border-radius:4px;
+            padding:0.6rem 0.9rem; font-family:'Inter',sans-serif;
+            font-size:0.82rem; color:{WHITE}; line-height:2; margin-bottom:0.5rem;">
+  <span style="color:{MUTED};">Flat (&lt; 1 mg/dL/min)</span> &nbsp;→&nbsp; <span style="color:#888888;">No dose</span><br/>
+  <span style="color:{MUTED};">Moderate (1–2 mg/dL/min)</span> &nbsp;→&nbsp; <span style="color:{AMBER};">25% of correction</span><br/>
+  <span style="color:{MUTED};">Rising fast (2–3 mg/dL/min)</span> &nbsp;→&nbsp; <span style="color:{AMBER};">50%</span><br/>
+  <span style="color:{MUTED};">Spiking (≥ 3 mg/dL/min)</span> &nbsp;→&nbsp; <span style="color:{NEON};">Full correction</span>
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.78rem;
+            color:{MUTED}; margin-bottom:1.25rem;">
+  Set in sidebar: Dosing Strategy → Smart dose scaling by rise rate
+</div>
+
+<div style="font-family:'Inter',sans-serif; font-size:0.72rem; font-weight:700;
+            color:{CYAN}; text-transform:uppercase; letter-spacing:0.5px;
+            margin-bottom:0.4rem;">
+  4 · Weight-Based Insulin Sensitivity (1700 Rule)
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.85rem; color:{WHITE};
+            line-height:1.7; margin-bottom:0.5rem;">
+  Insulin sensitivity (ISF) is estimated automatically from body weight
+  using the standard 1700 Rule.
+</div>
+<div style="background:{BG3}; border-left:3px solid {NEON}; padding:0.5rem 0.9rem;
+            font-family:'JetBrains Mono',monospace; font-size:0.82rem;
+            color:{NEON}; margin-bottom:0.5rem; border-radius:0 4px 4px 0;">
+  ISF ≈ 1700 ÷ (weight × 0.55)
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.82rem; color:{WHITE};
+            line-height:1.6; margin-bottom:0.4rem;">
+  70 kg patient → ~38.5 U/day → ISF ≈ 44 mg/dL per unit<br/>
+  Insulin-to-carb ratio also estimated (500 Rule).
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.78rem; color:{MUTED};">
+  Set in sidebar: Patient Profile → Estimate from weight
+</div>
+        """, unsafe_allow_html=True)
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 SCENARIO_OPTIONS = [
@@ -553,181 +672,239 @@ SCENARIO_OPTIONS = [
 
 with st.sidebar:
     st.markdown(f"""
-    <div style="font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700;
-                color:{NEON}; letter-spacing:4px; text-transform:uppercase;
-                text-shadow:0 0 10px {NEON_DIM}; padding:0.5rem 0 1rem 0;
-                border-bottom:1px solid {NEON_DIM};">
-      ⬡ CONTROLS
+    <div style="font-family:'Inter',sans-serif; font-size:1.05rem; font-weight:700;
+                color:{NEON}; padding:0.6rem 0 0.9rem 0;
+                border-bottom:1px solid {NEON_DIM}; letter-spacing:-0.3px;">
+      SWARM Bolus · Settings
     </div>
     """, unsafe_allow_html=True)
 
     dashboard_mode = st.radio(
-        "Mode",
-        ["Comparison", "Profile Sweep", "Retrospective Replay"],
+        "View",
+        ["A vs B Comparison", "Patient Population Sweep", "Retrospective CGM Replay"],
         horizontal=False,
-        help="Comparison: side-by-side scenario A vs B.  "
-             "Profile Sweep: one scenario across all 4 patient archetypes.  "
-             "Retrospective Replay: run controller against a real CGM trace.",
+        help=(
+            "A vs B Comparison — run two clinical scenarios side-by-side and compare outcomes.\n\n"
+            "Patient Population Sweep — run one scenario across all four patient archetypes "
+            "(standard adult, insulin-resistant, highly sensitive, rapid-onset).\n\n"
+            "Retrospective CGM Replay — load a real or reference CGM trace and see what the "
+            "controller would have recommended, without affecting the actual glucose."
+        ),
     )
+    # Map friendly names back to keys used downstream
+    _MODE_KEY = {
+        "A vs B Comparison": "Comparison",
+        "Patient Population Sweep": "Profile Sweep",
+        "Retrospective CGM Replay": "Retrospective Replay",
+    }
+    dashboard_mode = _MODE_KEY[dashboard_mode]
 
-    st.header("Scenarios")
+    st.header("Clinical Scenario")
     if dashboard_mode == "Comparison":
         scenario_a_name = st.selectbox("Scenario A", options=SCENARIO_OPTIONS, index=0)
         st.caption(SCENARIO_DESCRIPTIONS.get(scenario_a_name, ""))
         scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
         st.caption(SCENARIO_DESCRIPTIONS.get(scenario_b_name, ""))
     elif dashboard_mode == "Profile Sweep":
-        sweep_scenario_name = st.selectbox("Sweep Scenario", options=SCENARIO_OPTIONS, index=0)
+        sweep_scenario_name = st.selectbox("Scenario", options=SCENARIO_OPTIONS, index=0)
         st.caption(SCENARIO_DESCRIPTIONS.get(sweep_scenario_name, ""))
-        scenario_a_name = sweep_scenario_name   # keep downstream code happy
+        scenario_a_name = sweep_scenario_name
         scenario_b_name = sweep_scenario_name
     else:  # Retrospective Replay
-        retro_source = st.radio("CGM Source", ["Reference trace", "Upload CSV", "Paste CSV"])
+        retro_source = st.radio(
+            "CGM data source",
+            ["Built-in reference trace", "Upload CSV file", "Paste CSV text"],
+        )
         retro_trace_name: str | None = None
         retro_uploaded_text: str | None = None
 
-        if retro_source == "Reference trace":
+        if retro_source == "Built-in reference trace":
             retro_trace_name = st.selectbox(
-                "Select trace",
+                "Select reference trace",
                 options=list(REFERENCE_TRACES.keys()),
             )
             st.caption(REFERENCE_TRACE_DESCRIPTIONS.get(retro_trace_name, ""))
-        elif retro_source == "Upload CSV":
+        elif retro_source == "Upload CSV file":
             retro_file = st.file_uploader(
-                "Upload CGM CSV",
+                "Upload CGM file",
                 type=["csv", "txt"],
-                help="Simple: timestamp_min,glucose_mgdl  or  Dexcom G6/G7 Clarity export.",
+                help="Accepted formats:\n"
+                     "• Simple CSV: timestamp_min, glucose_mgdl\n"
+                     "• Dexcom G6/G7 Clarity export (auto-detected)",
             )
             if retro_file is not None:
                 retro_uploaded_text = retro_file.read().decode("utf-8", errors="replace")
-        else:  # Paste CSV
+        else:  # Paste
             retro_uploaded_text = st.text_area(
-                "Paste CGM data (timestamp_min,glucose_mgdl)",
+                "Paste CGM readings",
                 placeholder="timestamp_min,glucose_mgdl\n0,110\n5,115\n10,121\n...",
                 height=160,
             )
 
-        st.header("Controller (Retro)")
+        st.header("Patient Parameters (Replay)")
         retro_isf = st.slider(
-            "Correction factor (ISF, mg/dL/U)",
+            "Insulin sensitivity — mg/dL drop per unit",
             20.0, 120.0, 50.0, 1.0,
-            help="Estimated insulin sensitivity for this patient.",
+            help="How much 1 unit of insulin lowers blood glucose for this patient. "
+                 "Higher = more sensitive. Typical adult range: 30–80 mg/dL/U.",
         )
         retro_peak = st.selectbox(
-            "Insulin peak time (min)",
+            "Insulin type (time to peak action)",
             [55, 65, 75],
             index=2,
-            help="55 = Fiasp, 65 = Humalog, 75 = NovoLog",
+            format_func=lambda v: {55: "Fiasp / ultra-rapid (55 min)", 65: "Humalog / Lispro (65 min)", 75: "NovoLog / Aspart (75 min)"}[v],
         )
         scenario_a_name = retro_trace_name or "Custom trace"
         scenario_b_name = scenario_a_name
 
-    st.header("Simulation")
-    duration_minutes = st.slider("Duration (minutes)", 30, 360, 180, 30)
+    st.header("Simulation Settings")
+    duration_minutes = st.slider("Run duration (minutes)", 30, 360, 180, 30)
     step_minutes = st.selectbox(
-        "Timestep (minutes)",
+        "CGM reading interval",
         [1, 5, 10, 15],
         index=1,
-        help="1 min = FreeStyle Libre cadence (reads every 60 s). "
-             "5 min = Dexcom G6/G7 cadence. All thresholds scale automatically.",
+        format_func=lambda v: f"{v} min  ({'FreeStyle Libre' if v == 1 else 'Dexcom G6/G7' if v == 5 else 'standard'})",
+        help="How often the CGM provides a reading and the controller makes a decision. "
+             "1 min matches FreeStyle Libre; 5 min matches Dexcom G6/G7. "
+             "Detection thresholds adjust automatically.",
     )
 
-    st.header("Patient")
+    st.header("Patient Profile")
     _use_weight_isf = st.checkbox(
-        "Estimate ISF from weight (1700 Rule)",
+        "Estimate insulin sensitivity from weight",
         value=False,
-        help="Computes ISF = 1700 ÷ (weight × 0.55). "
-             "Override with the manual slider below if needed.",
+        help="Uses the 1700 Rule: ISF = 1700 ÷ total daily dose, "
+             "where total daily dose ≈ body weight (kg) × 0.55. "
+             "You can override the result manually.",
     )
     _weight_kg = st.slider(
         "Body weight (kg)",
         30.0, 150.0, 70.0, 1.0,
-        help="Used only when 'Estimate ISF from weight' is checked.",
     )
     if _use_weight_isf:
         _auto_isf = estimate_isf_from_weight(_weight_kg)
-        st.caption(f"Auto ISF: {_auto_isf:.1f} mg/dL/U  (TDD ≈ {_weight_kg * 0.55:.1f} U/day)")
+        st.caption(
+            f"Estimated sensitivity: **{_auto_isf:.1f} mg/dL per unit**  "
+            f"(daily dose ≈ {_weight_kg * 0.55:.1f} U)"
+        )
         correction_factor_mgdl_per_unit = _auto_isf
     else:
         correction_factor_mgdl_per_unit = st.slider(
-            "Correction factor (ISF, mg/dL/U)",
+            "Insulin sensitivity — mg/dL drop per unit",
             20.0, 120.0, 50.0, 1.0,
-            help="Manual ISF. 1 unit of insulin lowers glucose by this many mg/dL.",
+            help="How much blood glucose drops per unit of insulin for this patient. "
+                 "30 = insulin resistant, 50 = typical adult, 85 = highly sensitive.",
         )
 
-    st.header("Safety Layer")
-    max_units_per_interval = st.slider("Max units per interval", 0.05, 3.0, 1.0, 0.05)
-    max_insulin_on_board_u = st.slider("Max insulin on board (U)", 0.5, 10.0, 3.0, 0.1)
-    min_predicted_glucose_mgdl = st.slider("Min predicted glucose (mg/dL)", 60, 120, 80, 1)
-    require_confirmed_trend = st.checkbox("Require confirmed rising trend", value=True)
+    st.header("Safety Limits")
+    max_units_per_interval = st.slider(
+        "Maximum dose per reading (units)",
+        0.05, 3.0, 1.0, 0.05,
+        help="Hard cap on insulin delivered in a single interval. "
+             "Acts as a last-resort safety ceiling regardless of other settings.",
+    )
+    max_insulin_on_board_u = st.slider(
+        "Maximum active insulin allowed (units)",
+        0.5, 10.0, 3.0, 0.1,
+        help="If total insulin still active in the body reaches this level, "
+             "the controller will not add more — prevents stacking doses.",
+    )
+    min_predicted_glucose_mgdl = st.slider(
+        "Low glucose safety threshold (mg/dL)",
+        60, 120, 80, 1,
+        help="If glucose is predicted to fall below this value within 30 minutes, "
+             "all dosing is suspended until it recovers.",
+    )
+    require_confirmed_trend = st.checkbox(
+        "Only dose on a confirmed rising trend",
+        value=True,
+        help="Requires glucose to be rising over at least two consecutive readings "
+             "before the controller will recommend a correction. "
+             "Reduces false corrections on noisy sensor readings.",
+    )
 
-    st.header("Controller")
+    st.header("Dosing Strategy")
     min_excursion_delta = st.slider(
-        "Min excursion delta (mg/dL)",
+        "Ignore glucose changes smaller than (mg/dL)",
         0.0, 15.0, 0.0, 0.5,
-        help="Minimum glucose change per step to trigger correction. "
-             "Filters noise-driven micro-excursions.",
+        help="The controller ignores small fluctuations below this threshold — "
+             "useful for filtering out sensor noise near the target range.",
     )
 
     _ror_tiered = st.checkbox(
-        "RoR-tiered micro-bolus",
+        "Smart dose scaling by rise rate",
         value=False,
-        help="Dynamically scales the micro-bolus fraction based on rate of rise:\n"
-             "  < 1 mg/dL/min → 0% (flat, no dose)\n"
-             "  1–2 mg/dL/min → 25% of full correction\n"
-             "  2–3 mg/dL/min → 50%\n"
-             "  ≥ 3 mg/dL/min → 100% (aggressive spike)\n"
-             "Overrides the manual micro-bolus fraction slider when active.",
+        help="Automatically adjusts how much of the correction is given based on "
+             "how fast glucose is rising:\n"
+             "  Flat (< 1 mg/dL/min)    → no dose\n"
+             "  Moderate (1–2 mg/dL/min) → 25% of correction\n"
+             "  Rising fast (2–3)        → 50%\n"
+             "  Spiking (≥ 3 mg/dL/min) → full correction\n\n"
+             "When on, overrides the manual dose fraction slider.",
     )
     if _ror_tiered:
-        microbolus_fraction = 1.0   # unused — controller computes dynamically
-        st.caption("Fraction computed dynamically from RoR tier (see above).")
+        microbolus_fraction = 1.0
+        st.caption("Dose fraction set automatically by rise rate (see tiers above).")
     else:
         microbolus_fraction = st.slider(
-            "Micro-bolus fraction",
+            "Correction dose size (fraction of full correction)",
             0.0, 1.0, 0.25, 0.05,
-            help="Fixed fraction of full correction per interval. "
-                 "0.25 = quarter-dose micro-bolus strategy.",
+            help="How much of the calculated correction to deliver each interval. "
+                 "0.25 = quarter-dose micro-bolus; 1.0 = full correction each time.",
         )
 
-    st.header("Dual-Wave Bolus")
+    st.header("Split Delivery (Dual-Wave)")
     _dw_enabled = st.checkbox(
-        "Enable dual-wave (split) bolus",
+        "Split each dose into immediate + extended",
         value=False,
-        help="Splits each correction bolus into an immediate portion + "
-             "a slow extended tail, like a pump combo/dual-wave bolus.\n\n"
-             "Doctor's example: 30g carbs → 6U total → 2U quick + 4U over 20 min.",
+        help="Mimics a combo/dual-wave bolus as used on insulin pumps. "
+             "A portion is delivered immediately to cover the initial spike; "
+             "the rest drips in slowly over a set window.\n\n"
+             "Example: 6 units total → 2 units now + 4 units over 20 min.",
     )
     if _dw_enabled:
         _dw_imm_frac = st.slider(
-            "Immediate fraction",
+            "Immediate portion (fraction of total dose)",
             0.1, 0.9, 0.33, 0.01,
-            help="Fraction of the bolus to deliver right now. "
-                 "Remainder drips over the extended duration. "
-                 "Doctor's example: 2/6 ≈ 0.33.",
+            help="What fraction of the dose to give right now. "
+                 "The rest is delivered slowly over the extended window. "
+                 "Example: 2 of 6 units = 0.33.",
         )
         _dw_ext_dur = st.selectbox(
-            "Extended duration (min)",
+            "Extended delivery window",
             [10, 15, 20, 30, 45],
             index=2,
-            help="Minutes over which the remaining dose is delivered evenly. "
-                 "Doctor's example: ~20 min.",
+            format_func=lambda v: f"{v} minutes",
+            help="How long to spread the remaining dose. "
+                 "Matches slower carb absorption curves.",
         )
     else:
         _dw_imm_frac = 0.33
         _dw_ext_dur = 20
 
-    st.header("Pump")
-    dose_increment_u = st.selectbox("Dose increment (U)", [0.05, 0.1], index=0)
-    pump_max_units_per_interval = st.slider("Pump max units per interval", 0.05, 3.0, 1.0, 0.05)
+    st.header("Pump Hardware")
+    dose_increment_u = st.selectbox(
+        "Smallest deliverable dose step",
+        [0.05, 0.1],
+        index=0,
+        format_func=lambda v: f"{v} units",
+        help="Minimum dose increment the pump can deliver. "
+             "All doses are rounded to the nearest multiple.",
+    )
+    pump_max_units_per_interval = st.slider(
+        "Pump hard maximum per dose (units)",
+        0.05, 3.0, 1.0, 0.05,
+        help="Physical maximum the pump will deliver in one interval, "
+             "independent of the safety layer limit above.",
+    )
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     _btn_labels = {
-        "Comparison": "▶  RUN COMPARISON",
-        "Profile Sweep": "▶  RUN PROFILE SWEEP",
-        "Retrospective Replay": "▶  RUN RETROSPECTIVE REPLAY",
+        "Comparison": "Run Comparison",
+        "Profile Sweep": "Run Population Sweep",
+        "Retrospective Replay": "Run Retrospective Replay",
     }
-    _btn_label = _btn_labels.get(dashboard_mode, "▶  RUN")
+    _btn_label = _btn_labels.get(dashboard_mode, "Run")
     run_button = st.button(_btn_label, type="primary")
 
 # ── Results ──────────────────────────────────────────────────────────────────
@@ -751,7 +928,7 @@ if run_button:
     if dashboard_mode == "Retrospective Replay":
         # ── Load readings ──────────────────────────────────────────────────
         try:
-            if retro_source == "Reference trace" and retro_trace_name:
+            if retro_source == "Built-in reference trace" and retro_trace_name:
                 retro_readings = list(REFERENCE_TRACES[retro_trace_name])
                 _trace_label = retro_trace_name
             elif retro_uploaded_text and retro_uploaded_text.strip():
