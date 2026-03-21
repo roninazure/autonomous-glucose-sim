@@ -35,19 +35,18 @@ from ags.simulation.scenarios import (
 from ags.simulation.state import MealEvent, SimulationInputs
 
 # ── Palette ─────────────────────────────────────────────────────────────────
-# Clinical navy — professional, readable, easy on the eyes in low-light rooms.
-# Replaces the original electric-green hacker palette.
-BG       = "#0d1520"   # deep navy
-BG2      = "#152032"   # panel background
-BG3      = "#1c2d42"   # elevated surface
-NEON     = "#4ade80"   # soft clinical green (ADA in-range colour)
-NEON_DIM = "#166534"   # muted green border
-RED      = "#f87171"   # softer red for hypo/danger
-AMBER    = "#fbbf24"   # amber for hyperglycemia warning
-CYAN     = "#60a5fa"   # medical blue — secondary accent
-WHITE    = "#e2e8f0"   # clean off-white body text
-MUTED    = "#94a3b8"   # slate-grey muted text
-GRID     = "#1e3355"   # subtle chart gridlines
+# Clinical light theme — white/light-grey, high contrast, readable at any size.
+BG       = "#f8fafc"   # near-white page background
+BG2      = "#ffffff"   # sidebar / panel white
+BG3      = "#f1f5f9"   # slightly elevated surface (cards, table headers)
+NEON     = "#16a34a"   # clinical green (ADA in-range colour)
+NEON_DIM = "#dcfce7"   # very light green border/fill
+RED      = "#dc2626"   # clear red for hypo/danger
+AMBER    = "#d97706"   # amber for hyperglycemia warning
+CYAN     = "#1d4ed8"   # medical blue — section headings / accents
+WHITE    = "#1e293b"   # near-black body text (high contrast on light bg)
+MUTED    = "#64748b"   # slate-grey muted text
+GRID     = "#e2e8f0"   # subtle chart gridlines
 
 # ── Page config (must be first Streamlit call) ───────────────────────────────
 st.set_page_config(
@@ -72,83 +71,89 @@ html, body, [class*="css"] {{
 /* Sidebar */
 [data-testid="stSidebar"] {{
     background-color: {BG2} !important;
-    border-right: 1px solid {NEON_DIM} !important;
+    border-right: 1px solid {GRID} !important;
 }}
 [data-testid="stSidebar"] * {{
     font-family: 'Inter', sans-serif !important;
-    font-size: 0.85rem !important;
+    font-size: 0.875rem !important;
+    color: {WHITE} !important;
 }}
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {{
     color: {CYAN} !important;
-    font-size: 0.7rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.5px;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.6px;
     text-transform: uppercase;
     padding-bottom: 5px;
-    border-bottom: 1px solid {NEON_DIM};
+    border-bottom: 2px solid {NEON_DIM};
     margin-top: 1.4rem !important;
 }}
 /* Slider / selectbox labels */
 [data-testid="stSidebar"] label {{
     color: {WHITE} !important;
-    font-size: 0.83rem !important;
+    font-size: 0.875rem !important;
     font-weight: 500 !important;
+}}
+/* Radio button text */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {{
+    color: {WHITE} !important;
+    font-size: 0.875rem !important;
 }}
 
 /* Primary button */
 [data-testid="stButton"] > button[kind="primary"] {{
-    background: {NEON_DIM} !important;
-    border: 1px solid {NEON} !important;
-    color: {WHITE} !important;
+    background: {CYAN} !important;
+    border: none !important;
+    color: #ffffff !important;
     font-family: 'Inter', sans-serif !important;
     font-size: 0.9rem !important;
     font-weight: 600 !important;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     width: 100%;
     padding: 0.7rem !important;
-    border-radius: 4px !important;
+    border-radius: 6px !important;
     transition: all 0.15s ease;
 }}
 [data-testid="stButton"] > button[kind="primary"]:hover {{
-    background: {NEON} !important;
-    color: {BG} !important;
+    background: #1e40af !important;
+    color: #ffffff !important;
 }}
 
 /* Metrics */
 [data-testid="metric-container"] {{
-    background-color: {BG2} !important;
-    border: 1px solid {NEON_DIM} !important;
-    border-radius: 6px !important;
+    background-color: {BG3} !important;
+    border: 1px solid {GRID} !important;
+    border-radius: 8px !important;
     padding: 12px 16px !important;
 }}
 [data-testid="stMetricValue"] {{
-    color: {NEON} !important;
+    color: {CYAN} !important;
     font-family: 'JetBrains Mono', monospace !important;
     font-size: 1.4rem !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
 }}
 [data-testid="stMetricLabel"] {{
     color: {MUTED} !important;
     font-family: 'Inter', sans-serif !important;
-    font-size: 0.72rem !important;
+    font-size: 0.75rem !important;
     font-weight: 500 !important;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
 }}
 
 /* Dataframe */
 [data-testid="stDataFrame"] {{
-    border: 1px solid {NEON_DIM} !important;
-    border-radius: 4px !important;
+    border: 1px solid {GRID} !important;
+    border-radius: 6px !important;
 }}
 [data-testid="stDataFrame"] th {{
     background-color: {BG3} !important;
     color: {CYAN} !important;
     font-family: 'Inter', sans-serif !important;
-    font-size: 0.75rem !important;
+    font-size: 0.78rem !important;
     font-weight: 600 !important;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
 }}
 [data-testid="stDataFrame"] td {{
     font-family: 'JetBrains Mono', monospace !important;
@@ -158,37 +163,35 @@ html, body, [class*="css"] {{
 
 /* Plotly containers */
 [data-testid="stPlotlyChart"] {{
-    border: 1px solid {NEON_DIM};
-    border-radius: 6px;
+    border: 1px solid {GRID};
+    border-radius: 8px;
     overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }}
 
 /* Info / alert box */
 [data-testid="stAlert"] {{
-    background-color: {BG2} !important;
-    border: 1px solid {NEON_DIM} !important;
-    color: {WHITE} !important;
     font-family: 'Inter', sans-serif !important;
-    font-size: 0.85rem !important;
-    border-radius: 4px !important;
+    font-size: 0.875rem !important;
+    border-radius: 6px !important;
 }}
 
 /* Expander */
 [data-testid="stExpander"] summary {{
     font-family: 'Inter', sans-serif !important;
-    font-size: 0.85rem !important;
+    font-size: 0.875rem !important;
     font-weight: 500 !important;
     color: {CYAN} !important;
 }}
 
 /* Scrollbar */
-::-webkit-scrollbar {{ width: 5px; height: 5px; }}
-::-webkit-scrollbar-track {{ background: {BG}; }}
-::-webkit-scrollbar-thumb {{ background: {NEON_DIM}; border-radius: 3px; }}
-::-webkit-scrollbar-thumb:hover {{ background: {NEON}; }}
+::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+::-webkit-scrollbar-track {{ background: {BG3}; }}
+::-webkit-scrollbar-thumb {{ background: {GRID}; border-radius: 3px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {MUTED}; }}
 
 /* Divider */
-hr {{ border-color: {NEON_DIM} !important; opacity: 0.4; }}
+hr {{ border-color: {GRID} !important; opacity: 0.8; }}
 
 /* Section labels */
 .section-label {{
@@ -215,28 +218,28 @@ def _layout(title: str = "", height: int = 320) -> dict:
         ),
         height=height,
         margin=dict(l=55, r=20, t=44, b=44),
-        plot_bgcolor=BG,
-        paper_bgcolor=BG2,
+        plot_bgcolor=BG2,
+        paper_bgcolor=BG3,
         font=dict(family="Inter", color=WHITE, size=11),
         xaxis=dict(
             gridcolor=GRID,
-            linecolor=NEON_DIM,
-            tickcolor=NEON_DIM,
+            linecolor=GRID,
+            tickcolor=GRID,
             tickfont=dict(color=MUTED, size=10),
             title_font=dict(color=MUTED, size=11),
             zeroline=False,
         ),
         yaxis=dict(
             gridcolor=GRID,
-            linecolor=NEON_DIM,
-            tickcolor=NEON_DIM,
+            linecolor=GRID,
+            tickcolor=GRID,
             tickfont=dict(color=MUTED, size=10),
             title_font=dict(color=MUTED, size=11),
             zeroline=False,
         ),
         legend=dict(
-            bgcolor=BG,
-            bordercolor=NEON_DIM,
+            bgcolor=BG3,
+            bordercolor=GRID,
             borderwidth=1,
             font=dict(family="Inter", size=11, color=WHITE),
             orientation="h",
@@ -463,9 +466,9 @@ def decision_timeline_panel(
         )
 
         st.markdown(f"""
-<div style="background:{BG2}; border:1px solid {NEON_DIM}; border-left:3px solid {_gate_fg};
-            border-radius:3px; padding:1rem 1.25rem; margin-top:0.25rem;
-            font-family:'Share Tech Mono',monospace; font-size:0.72rem;
+<div style="background:{BG3}; border:1px solid {GRID}; border-left:3px solid {_gate_fg};
+            border-radius:6px; padding:1rem 1.25rem; margin-top:0.25rem;
+            font-family:'JetBrains Mono',monospace; font-size:0.78rem;
             color:{WHITE}; line-height:1.9; white-space:pre;">
 <span style="color:{NEON_DIM}">┌─ t = {_e.timestamp_min} min ──────────────────────────────────────</span>
 <span style="color:{CYAN}">  cgm            : {_e.cgm_mgdl:.1f} mg/dL</span>
@@ -1601,19 +1604,15 @@ if run_button:
 
     st.markdown(f"""
     <div style="margin-top:1rem;">
-      <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
-                  letter-spacing:4px; text-transform:uppercase; margin-bottom:0.5rem;">
-        ── AI COMPARATIVE VERDICT
+      <div style="font-family:'Inter',sans-serif; font-size:0.75rem; color:{MUTED};
+                  font-weight:600; letter-spacing:0.4px; text-transform:uppercase;
+                  margin-bottom:0.5rem;">
+        AI Comparative Verdict
       </div>
-      <div style="background:{BG2}; border:1px solid {NEON_DIM}; border-left:3px solid {NEON};
-                  border-radius:3px; padding:1.25rem 1.5rem; font-family:'Share Tech Mono',monospace;
-                  font-size:0.8rem; color:{WHITE}; line-height:2;
-                  white-space:pre; overflow-x:auto;">
-<span style="color:{NEON_DIM}">$ swarm-bolus --verdict</span>
-
+      <div style="background:{BG3}; border:1px solid {GRID}; border-left:4px solid {NEON};
+                  border-radius:6px; padding:1.25rem 1.5rem; font-family:'Inter',sans-serif;
+                  font-size:0.875rem; color:{WHITE}; line-height:1.8; overflow-x:auto;">
 {verdict_text}
-
-<span style="color:{NEON_DIM}; animation:blink 1s step-end infinite;">▌</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1622,18 +1621,18 @@ else:
     # ── Landing state ─────────────────────────────────────────────────────
     st.markdown(f"""
     <div style="display:flex; align-items:center; justify-content:center;
-                min-height:340px; border:1px solid {NEON_DIM}; border-radius:3px;
-                background:{BG2}; margin-top:1rem;">
+                min-height:340px; border:1px dashed {GRID}; border-radius:8px;
+                background:{BG3}; margin-top:1rem;">
       <div style="text-align:center;">
-        <div style="font-family:'Orbitron',monospace; font-size:1.2rem; color:{NEON_DIM};
-                    letter-spacing:6px; text-transform:uppercase; margin-bottom:1rem;">
-          AWAITING INPUT
+        <div style="font-family:'Inter',sans-serif; font-size:1.5rem; color:{GRID};
+                    font-weight:700; margin-bottom:0.75rem;">
+          Ready to simulate
         </div>
-        <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:{MUTED};
-                    letter-spacing:2px; text-transform:uppercase; line-height:2;">
-          Select a mode in the sidebar<br/>
-          Configure safety &amp; pump parameters<br/>
-          Press <span style="color:{NEON}">▶ RUN</span> to simulate
+        <div style="font-family:'Inter',sans-serif; font-size:0.9rem; color:{MUTED};
+                    line-height:2;">
+          Choose a view in the sidebar<br/>
+          Configure the patient and safety settings<br/>
+          Press <strong style="color:{CYAN}">Run</strong> to start
         </div>
       </div>
     </div>
