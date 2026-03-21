@@ -21,6 +21,8 @@ def run_evaluation(
     duration_minutes: int = 180,
     step_minutes: int = 5,
     seed: int = 42,
+    target_glucose_mgdl: float = 110.0,
+    correction_factor_mgdl_per_unit: float = 50.0,
 ) -> tuple[list[TimestepRecord], RunSummary]:
     safety_thresholds = safety_thresholds or SafetyThresholds()
     pump_config = pump_config or PumpConfig()
@@ -45,8 +47,8 @@ def run_evaluation(
             current_glucose_mgdl=current.cgm_glucose_mgdl,
             previous_glucose_mgdl=previous.cgm_glucose_mgdl,
             insulin_on_board_u=tracked_iob_u,
-            target_glucose_mgdl=110.0,
-            correction_factor_mgdl_per_unit=50.0,
+            target_glucose_mgdl=target_glucose_mgdl,
+            correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
         )
 
         _, _, recommendation, safety_decision = run_controller_with_safety(
