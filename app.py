@@ -341,7 +341,7 @@ def iob_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
         hovertemplate="%{y:.3f} U<extra>B IOB</extra>",
     ))
 
-    layout = _layout("Active insulin on board (IOB)", height=240)
+    layout = _layout("Insulin still active in the body (IOB)", height=240)
     layout["yaxis"]["title"] = "Units active"
     layout["xaxis"]["title"] = "Time (minutes)"
     fig.update_layout(**layout)
@@ -357,16 +357,16 @@ def safety_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: st
         if not blocked.empty:
             fig.add_trace(go.Scatter(
                 x=blocked["timestamp_min"], y=[label] * len(blocked),
-                mode="markers", name=f"{label} Dose withheld",
+                mode="markers", name=f"{label} Dose blocked (safety cap reached)",
                 marker=dict(symbol="x", size=12, color=RED, line=dict(width=2, color=RED)),
-                hovertemplate="t=%{x} min — dose withheld<extra>" + label + "</extra>",
+                hovertemplate="t=%{x} min — dose blocked by safety system<extra>" + label + "</extra>",
             ))
         if not clipped.empty:
             fig.add_trace(go.Scatter(
                 x=clipped["timestamp_min"], y=[label] * len(clipped),
-                mode="markers", name=f"{label} Dose capped",
+                mode="markers", name=f"{label} Dose reduced to maximum limit",
                 marker=dict(symbol="triangle-up", size=11, color=AMBER, line=dict(width=1, color=AMBER)),
-                hovertemplate="t=%{x} min — dose capped at limit<extra>" + label + "</extra>",
+                hovertemplate="t=%{x} min — dose reduced to per-interval limit<extra>" + label + "</extra>",
             ))
 
     layout = _layout("Safety interventions", height=200)
@@ -415,8 +415,8 @@ def decision_timeline_panel(
                 "Trend": f"{exp.trend_arrow} {exp.trend_rate_mgdl_per_min:+.1f}/min",
                 "Predicted +30 min": f"{exp.predicted_glucose_mgdl:.0f}",
                 "Active insulin (U)": f"{exp.iob_u:.2f}",
-                "Calculated dose (U)": f"{exp.recommended_units:.3f}",
-                "Safety check": GATE_LABELS.get(exp.safety_gate, exp.safety_gate),
+                "Correction wanted (U)": f"{exp.recommended_units:.3f}",
+                "Safety decision": GATE_LABELS.get(exp.safety_gate, exp.safety_gate),
                 "Delivered (U)": f"{exp.delivered_units:.3f}",
                 "Clinical rationale": exp.narrative,
             })
@@ -432,7 +432,7 @@ def decision_timeline_panel(
             bg = f"{fg}22"
             result = [""] * len(row)
             try:
-                gate_idx = list(_tl_df.columns).index("Safety check")
+                gate_idx = list(_tl_df.columns).index("Safety decision")
                 result[gate_idx] = f"background-color:{bg}; color:{fg}; font-weight:700;"
             except ValueError:
                 pass
@@ -817,41 +817,43 @@ with st.sidebar:
              "all dosing is suspended until it recovers.",
     )
     require_confirmed_trend = st.checkbox(
-        "Require two consecutive rising readings before dosing",
+        "Wait for two consecutive rising readings before dosing",
         value=True,
-        help="Adds a confirmation step: glucose must be rising on at least two "
-             "consecutive CGM readings before a correction is recommended. "
-             "Reduces unnecessary doses caused by sensor noise.",
+        help="If enabled, the algorithm waits until glucose has risen on at least two readings in a row "
+             "before recommending a correction. "
+             "This avoids giving insulin on a single noisy reading that might not represent a true rise. "
+             "Recommended: keep this on.",
     )
 
     st.header("Dosing Strategy")
     min_excursion_delta = st.slider(
-        "Minimum glucose change to trigger a dose (mg/dL)",
+        "Ignore glucose changes smaller than (mg/dL)",
         0.0, 15.0, 0.0, 0.5,
-        help="Small glucose fluctuations below this value are ignored. "
-             "Useful for filtering out sensor noise when glucose is near the target range.",
+        help="If glucose moves by less than this amount between readings, no dose is considered. "
+             "Set to a small value (e.g. 2–5) to avoid reacting to sensor noise when glucose is stable near target.",
     )
 
     _ror_tiered = st.checkbox(
-        "Scale dose by glucose trend speed",
+        "Adjust dose size based on how fast glucose is rising",
         value=False,
-        help="Automatically adjusts how much of the correction is given based on "
-             "how fast glucose is rising:\n"
-             "  Stable (< 1 mg/dL/min)    → no dose\n"
-             "  Rising moderately (1–2 mg/dL/min) → 25% of correction\n"
-             "  Rising quickly (2–3 mg/dL/min) → 50%\n"
-             "  Spiking (≥ 3 mg/dL/min) → full correction\n\n"
-             "When on, overrides the manual dose fraction slider.",
+        help="When enabled, the algorithm automatically scales how much it gives based on the speed of the rise:\n"
+             "  Flat or falling             → no dose\n"
+             "  Rising slowly (< 1 mg/dL/min)  → no dose\n"
+             "  Rising moderately (1–2 mg/dL/min) → 25% of the calculated correction\n"
+             "  Rising quickly (2–3 mg/dL/min)   → 50%\n"
+             "  Spiking (≥ 3 mg/dL/min)          → full correction\n\n"
+             "When enabled, this overrides the manual fraction slider below.",
     )
     if _ror_tiered:
         microbolus_fraction = 1.0
-        st.caption("Dose size is set automatically based on glucose trend speed.")
+        st.caption("Dose fraction is set automatically — faster rise triggers a larger dose.")
     else:
         microbolus_fraction = st.slider(
-            "Correction dose size (fraction of calculated dose)",
+            "What fraction of the calculated correction to deliver each interval",
             0.0, 1.0, 0.25, 0.05,
-            help="How much of the calculated correction to deliver each interval. "
-                 "0.25 = conservative quarter-dose; 1.0 = full correction each time.",
+            help="0.25 = deliver one quarter of the calculated correction (cautious, reduces stacking risk). "
+                 "1.0 = deliver the full correction in one go. "
+                 "Most closed-loop systems use 0.2–0.5 for safety.",
         )
 
     st.header("Split Bolus Delivery")
@@ -883,20 +885,21 @@ with st.sidebar:
         _dw_imm_frac = 0.33
         _dw_ext_dur = 20
 
-    st.header("Pump Hardware")
+    st.header("Pump Settings")
     dose_increment_u = st.selectbox(
-        "Minimum dose increment",
+        "Smallest dose the pump can deliver",
         [0.05, 0.1],
         index=0,
         format_func=lambda v: f"{v} units",
-        help="The smallest amount of insulin the pump can deliver. "
-             "All calculated doses are rounded to the nearest increment.",
+        help="The minimum resolution of the pump. Calculated doses are rounded to the nearest increment. "
+             "0.05 U matches most modern insulin pumps.",
     )
     pump_max_units_per_interval = st.slider(
-        "Pump maximum dose per delivery (units)",
+        "Pump hardware dose ceiling (units)",
         0.05, 3.0, 1.0, 0.05,
-        help="The physical maximum the pump will deliver in one interval. "
-             "This is a hardware limit, separate from the safety limit above.",
+        help="The physical maximum the pump hardware will deliver in a single interval — "
+             "a hard mechanical limit independent of the safety settings above. "
+             "In practice this is usually set to match the safety maximum.",
     )
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
@@ -976,8 +979,8 @@ if run_button:
         rc2.metric("Average glucose", f"{retro_summary.average_cgm_glucose_mgdl:.0f} mg/dL")
         rc3.metric("Peak glucose", f"{retro_summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
         rc4.metric("Total insulin delivered (U)", f"{retro_summary.total_insulin_delivered_u:.2f}")
-        rc5.metric("Doses withheld", retro_summary.blocked_decisions)
-        rc6.metric("Dosing paused", retro_summary.time_suspended_steps)
+        rc5.metric("Blocked by safety", retro_summary.blocked_decisions, help="Intervals where the algorithm wanted to dose but was stopped — most commonly because active insulin had reached the safety cap.")
+        rc6.metric("Low-glucose holds", retro_summary.time_suspended_steps, help="Intervals where dosing was suspended because glucose was predicted to drop below the low-glucose threshold.")
 
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
@@ -1055,7 +1058,7 @@ if run_button:
                 fill="tozeroy", fillcolor="rgba(0,245,255,0.07)",
                 hovertemplate="%{y:.3f} U<extra>IOB</extra>",
             ))
-            _rIOB_layout = _layout("Hypothetical active insulin (IOB)", height=280)
+            _rIOB_layout = _layout("Hypothetical insulin still active in the body (IOB)", height=280)
             _rIOB_layout["yaxis"]["title"] = "IOB (U)"
             _rIOB_layout["xaxis"]["title"] = "minutes"
             _rIOB.update_layout(**_rIOB_layout)
@@ -1344,11 +1347,11 @@ if run_button:
         r3.metric("Peak glucose", f"{summary_a.peak_cgm_glucose_mgdl:.0f} mg/dL")
         r4.metric("Above 250 mg/dL", f"{summary_a.time_above_250_steps} readings")
         r5, r6, r7, r8, r9 = st.columns(5)
-        r5.metric("Calculated dose (U)", f"{summary_a.total_recommended_insulin_u:.2f}")
-        r6.metric("Delivered (U)", f"{summary_a.total_insulin_delivered_u:.2f}")
-        r7.metric("Doses withheld", summary_a.blocked_decisions)
-        r8.metric("Doses capped", summary_a.clipped_decisions)
-        r9.metric("Dosing paused", summary_a.time_suspended_steps)
+        r5.metric("Correction wanted (U)", f"{summary_a.total_recommended_insulin_u:.2f}", help="Total insulin the algorithm calculated across all intervals. Most will be blocked when the active-insulin safety cap is reached.")
+        r6.metric("Actually delivered (U)", f"{summary_a.total_insulin_delivered_u:.2f}")
+        r7.metric("Blocked by safety", summary_a.blocked_decisions, help="Intervals where the algorithm wanted to dose but the safety system said no — most commonly because active insulin had already reached the safety cap.")
+        r8.metric("Reduced to limit", summary_a.clipped_decisions, help="Intervals where the calculated dose was trimmed down to the per-interval maximum.")
+        r9.metric("Low-glucose holds", summary_a.time_suspended_steps, help="Intervals where all dosing was suspended because glucose was predicted to drop below the low-glucose safety threshold.")
 
     with col_b:
         st.markdown(f"""
@@ -1364,13 +1367,31 @@ if run_button:
         r3.metric("Peak glucose", f"{summary_b.peak_cgm_glucose_mgdl:.0f} mg/dL")
         r4.metric("Above 250 mg/dL", f"{summary_b.time_above_250_steps} readings")
         r5, r6, r7, r8, r9 = st.columns(5)
-        r5.metric("Calculated dose (U)", f"{summary_b.total_recommended_insulin_u:.2f}")
-        r6.metric("Delivered (U)", f"{summary_b.total_insulin_delivered_u:.2f}")
-        r7.metric("Doses withheld", summary_b.blocked_decisions)
-        r8.metric("Doses capped", summary_b.clipped_decisions)
-        r9.metric("Dosing paused", summary_b.time_suspended_steps)
+        r5.metric("Correction wanted (U)", f"{summary_b.total_recommended_insulin_u:.2f}", help="Total insulin the algorithm calculated across all intervals. Most will be blocked when the active-insulin safety cap is reached.")
+        r6.metric("Actually delivered (U)", f"{summary_b.total_insulin_delivered_u:.2f}")
+        r7.metric("Blocked by safety", summary_b.blocked_decisions, help="Intervals where the algorithm wanted to dose but the safety system said no — most commonly because active insulin had already reached the safety cap.")
+        r8.metric("Reduced to limit", summary_b.clipped_decisions, help="Intervals where the calculated dose was trimmed down to the per-interval maximum.")
+        r9.metric("Low-glucose holds", summary_b.time_suspended_steps, help="Intervals where all dosing was suspended because glucose was predicted to drop below the low-glucose safety threshold.")
 
     st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+    # ── Contextual note: explain blocked doses ─────────────────────────
+    _total_blocked = summary_a.blocked_decisions + summary_b.blocked_decisions
+    if _total_blocked > 0:
+        _block_parts = []
+        if summary_a.blocked_decisions > 0:
+            _block_parts.append(f"Scenario A: {summary_a.blocked_decisions} intervals blocked")
+        if summary_b.blocked_decisions > 0:
+            _block_parts.append(f"Scenario B: {summary_b.blocked_decisions} intervals blocked")
+        st.info(
+            f"**Why were doses blocked?** ({' · '.join(_block_parts)})  \n"
+            f"The safety system prevents insulin stacking: once active insulin already in the body "
+            f"reaches the cap you set ({max_insulin_on_board_u:.1f} U), no further doses are given until "
+            f"that insulin clears. The gap between *Correction wanted* and *Actually delivered* reflects "
+            f"this. This is expected behaviour — the algorithm is not broken. "
+            f"To allow more aggressive correction, raise **Maximum active insulin allowed** in the sidebar. "
+            f"Open the **Decision log** below each scenario to see the reason for every individual interval."
+        )
 
     # ── Charts ────────────────────────────────────────────────────────────
     st.plotly_chart(
@@ -1393,6 +1414,12 @@ if run_button:
     st.plotly_chart(
         safety_chart(df_a, df_b, scenario_a_name, scenario_b_name),
         width="stretch",
+    )
+    st.caption(
+        "Red × = dose blocked by the safety system (active insulin reached the cap, "
+        "or low-glucose protection fired). "
+        "Orange △ = dose was reduced to the per-interval maximum. "
+        "These markers mean the safety layer is working as intended."
     )
 
     # ── Metrics table ─────────────────────────────────────────────────────
@@ -1468,12 +1495,13 @@ if run_button:
     ints_b = summary_b.blocked_decisions + summary_b.clipped_decisions
     if ints_b > ints_a:
         verdict_lines.append(
-            f"Safety checks:  Scenario B required more safety interventions ({ints_b} vs {ints_a}), "
-            f"reflecting greater dosing constraint pressure."
+            f"Safety checks:  Scenario B triggered more safety interventions ({ints_b} vs {ints_a}), "
+            f"meaning the algorithm tried to dose more aggressively but was held back by the active-insulin cap more often."
         )
     elif ints_a > ints_b:
         verdict_lines.append(
-            f"Safety checks:  Scenario A required more safety interventions ({ints_a} vs {ints_b})."
+            f"Safety checks:  Scenario A triggered more safety interventions ({ints_a} vs {ints_b}), "
+            f"meaning the active-insulin cap was reached more often in that scenario."
         )
 
     if summary_b.total_insulin_delivered_u > summary_a.total_insulin_delivered_u * 1.15:
