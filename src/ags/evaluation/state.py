@@ -12,6 +12,7 @@ class TimestepRecord:
     safety_status: str
     safety_final_units: float
     pump_delivered_units: float
+    insulin_on_board_u: float = 0.0
 
 
 @dataclass

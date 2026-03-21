@@ -41,10 +41,14 @@ def run_evaluation(
     tracked_x2 = snapshots[0].insulin_compartment2_u
 
     for previous, current in zip(snapshots[:-1], snapshots[1:]):
+        # Capture IOB before this step's delivery so the chart shows what the
+        # controller and safety layer actually saw when making their decision.
+        step_iob_u = insulin_on_board(tracked_x1, tracked_x2)
+
         controller_inputs = ControllerInputs(
             current_glucose_mgdl=current.cgm_glucose_mgdl,
             previous_glucose_mgdl=previous.cgm_glucose_mgdl,
-            insulin_on_board_u=insulin_on_board(tracked_x1, tracked_x2),
+            insulin_on_board_u=step_iob_u,
             target_glucose_mgdl=target_glucose_mgdl,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
         )
@@ -78,6 +82,7 @@ def run_evaluation(
                 safety_status=safety_decision.status,
                 safety_final_units=safety_decision.final_units,
                 pump_delivered_units=pump_result.delivered_units,
+                insulin_on_board_u=step_iob_u,
             )
         )
 
