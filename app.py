@@ -633,7 +633,12 @@ with st.sidebar:
     pump_max_units_per_interval = st.slider("Pump max units per interval", 0.1, 3.0, 1.0, 0.05)
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
-    _btn_label = "▶  RUN COMPARISON" if dashboard_mode == "Comparison" else "▶  RUN PROFILE SWEEP"
+    _btn_labels = {
+        "Comparison": "▶  RUN COMPARISON",
+        "Profile Sweep": "▶  RUN PROFILE SWEEP",
+        "Retrospective Replay": "▶  RUN RETROSPECTIVE REPLAY",
+    }
+    _btn_label = _btn_labels.get(dashboard_mode, "▶  RUN")
     run_button = st.button(_btn_label, type="primary")
 
 # ── Results ──────────────────────────────────────────────────────────────────
@@ -1346,9 +1351,9 @@ else:
         </div>
         <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:{MUTED};
                     letter-spacing:2px; text-transform:uppercase; line-height:2;">
-          Select scenarios in the sidebar<br/>
+          Select a mode in the sidebar<br/>
           Configure safety &amp; pump parameters<br/>
-          Press <span style="color:{NEON}">▶ RUN COMPARISON</span> to simulate
+          Press <span style="color:{NEON}">▶ RUN</span> to simulate
         </div>
       </div>
     </div>
