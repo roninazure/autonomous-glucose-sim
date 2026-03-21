@@ -13,6 +13,8 @@ dependencies = [
   "pandas",
   "pyyaml",
   "matplotlib",
+  "plotly>=5.0.0",
+  "streamlit>=1.40.0",
 ]
 
 [tool.setuptools]
