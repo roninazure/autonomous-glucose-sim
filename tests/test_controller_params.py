@@ -38,12 +38,13 @@ def test_higher_target_delivers_less_insulin() -> None:
     )
 
 
-def test_weaker_correction_factor_delivers_less_insulin() -> None:
-    """A smaller correction factor means each unit of insulin corrects less,
-    so the controller recommends more units for the same excursion.
+def test_weaker_correction_factor_recommends_more_insulin() -> None:
+    """A smaller correction factor means each unit corrects less glucose,
+    so the controller must recommend more units for the same excursion.
 
-    Equivalently: a larger correction factor (insulin more potent) means fewer
-    units are needed, so total_insulin_delivered_u should decrease.
+    We compare total_recommended_insulin_u (raw controller output) rather
+    than total_insulin_delivered_u to avoid the safety IOB cap masking the
+    difference when both scenarios hit the cap equally.
     """
     scenario = baseline_meal_scenario()
 
@@ -62,7 +63,7 @@ def test_weaker_correction_factor_delivers_less_insulin() -> None:
         correction_factor_mgdl_per_unit=80.0,  # 1U corrects 80 mg/dL → fewer units needed
     )
 
-    assert summary_weak.total_insulin_delivered_u > summary_strong.total_insulin_delivered_u, (
-        "Weaker correction factor should require more total insulin. "
+    assert summary_weak.total_recommended_insulin_u > summary_strong.total_recommended_insulin_u, (
+        "Weaker correction factor should produce higher total recommended insulin. "
         "If this fails, correction_factor_mgdl_per_unit is not reaching the controller."
     )

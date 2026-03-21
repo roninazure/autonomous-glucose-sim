@@ -5,31 +5,8 @@ from ags.simulation.insulin import (
     insulin_glucose_effect_mgdl,
     insulin_on_board,
 )
-from ags.simulation.state import MealEvent, SimulationInputs, SimulationSnapshot
-
-
-def meal_carbs_active_at_step(
-    meal: MealEvent,
-    current_time_min: int,
-    step_minutes: int = 5,
-) -> float:
-    elapsed = current_time_min - meal.timestamp_min
-    if elapsed < 0 or elapsed >= meal.absorption_minutes:
-        return 0.0
-
-    steps_total = max(1, meal.absorption_minutes // step_minutes)
-    return meal.carbs_g / steps_total
-
-
-def compute_active_meal_carbs(
-    current_time_min: int,
-    inputs: SimulationInputs,
-    step_minutes: int = 5,
-) -> float:
-    return sum(
-        meal_carbs_active_at_step(meal, current_time_min, step_minutes)
-        for meal in inputs.meal_events
-    )
+from ags.simulation.meal import compute_active_meal_carbs_g
+from ags.simulation.state import SimulationInputs, SimulationSnapshot
 
 
 def advance_physiology(
@@ -39,15 +16,16 @@ def advance_physiology(
 ) -> SimulationSnapshot:
     next_time = snapshot.timestamp_min + step_minutes
 
-    active_meal_carbs = compute_active_meal_carbs(
+    # Carbs appearing in blood this step via gamma(2, τ) gut absorption.
+    active_meal_carbs = compute_active_meal_carbs_g(
         current_time_min=next_time,
-        inputs=inputs,
+        meal_events=inputs.meal_events,
         step_minutes=step_minutes,
     )
 
     meal_glucose_effect = active_meal_carbs * inputs.carb_impact_mgdl_per_g
 
-    # Glucose effect comes from the active (interstitial) pool, x2.
+    # Glucose effect comes from the active (interstitial) insulin pool, x2.
     insulin_effect = insulin_glucose_effect_mgdl(
         x2=snapshot.insulin_compartment2_u,
         step_minutes=step_minutes,
@@ -63,12 +41,10 @@ def advance_physiology(
 
     next_true_glucose = max(40.0, snapshot.true_glucose_mgdl + glucose_delta)
 
-    # Advance the 2-compartment PK/PD state. No new dose is injected here;
-    # the engine adds delivered insulin via the snapshot before calling this.
     x1_next, x2_next = advance_insulin_compartments(
         x1=snapshot.insulin_compartment1_u,
         x2=snapshot.insulin_compartment2_u,
-        dose_u=0.0,  # doses are injected externally via delivered_insulin_u
+        dose_u=0.0,
         step_minutes=step_minutes,
         peak_minutes=inputs.insulin_peak_minutes,
     )
