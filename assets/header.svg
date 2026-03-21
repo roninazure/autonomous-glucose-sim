@@ -1,0 +1,252 @@
+<svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg" width="900" height="280">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&amp;display=swap');
+
+      .cgm-path {
+        stroke-dasharray: 1800;
+        stroke-dashoffset: 1800;
+        animation: draw 4s cubic-bezier(0.4,0,0.2,1) 0.5s forwards;
+      }
+      @keyframes draw {
+        to { stroke-dashoffset: 0; }
+      }
+
+      .blink { animation: blink 1.2s step-end infinite; }
+      @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+      .pulse-ring {
+        animation: pulse 2s ease-out infinite;
+        transform-origin: 812px 68px;
+      }
+      @keyframes pulse {
+        0%  { opacity:0.8; transform: scale(1); }
+        100%{ opacity:0;   transform: scale(2.4); }
+      }
+
+      .scanline {
+        animation: scan 8s linear infinite;
+      }
+      @keyframes scan {
+        0%  { transform: translateY(0px);   opacity: 0.06; }
+        50% { opacity: 0.03; }
+        100%{ transform: translateY(280px); opacity: 0.06; }
+      }
+
+      .glow-text {
+        filter: drop-shadow(0 0 8px #39ff14) drop-shadow(0 0 20px #39ff1466);
+      }
+      .glow-line {
+        filter: drop-shadow(0 0 4px #39ff14) drop-shadow(0 0 10px #39ff1488);
+      }
+      .dim-text { opacity: 0.35; }
+
+      .fade-in-1 { animation: fadeIn 0.6s ease 1s both; }
+      .fade-in-2 { animation: fadeIn 0.6s ease 1.4s both; }
+      .fade-in-3 { animation: fadeIn 0.6s ease 1.8s both; }
+      .fade-in-4 { animation: fadeIn 0.6s ease 2.2s both; }
+      @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+      .counter {
+        animation: countUp 3s ease 1s both;
+      }
+    </style>
+
+    <!-- Grid pattern -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#39ff14" stroke-width="0.3" opacity="0.15"/>
+    </pattern>
+    <pattern id="finegrid" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M 8 0 L 0 0 0 8" fill="none" stroke="#39ff14" stroke-width="0.15" opacity="0.08"/>
+    </pattern>
+
+    <!-- Glow filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="strongglow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="textglow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- Scanline gradient -->
+    <linearGradient id="scanGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#39ff14" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#39ff14" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- CGM trace gradient -->
+    <linearGradient id="traceGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#39ff14" stop-opacity="0.2"/>
+      <stop offset="20%"  stop-color="#39ff14" stop-opacity="1"/>
+      <stop offset="80%"  stop-color="#39ff14" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#39ff14" stop-opacity="0.4"/>
+    </linearGradient>
+
+    <!-- Range band gradient -->
+    <linearGradient id="rangeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#39ff14" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#39ff14" stop-opacity="0.02"/>
+    </linearGradient>
+
+    <clipPath id="chartClip">
+      <rect x="60" y="30" width="720" height="210"/>
+    </clipPath>
+  </defs>
+
+  <!-- BG -->
+  <rect width="900" height="280" fill="#050a06"/>
+
+  <!-- Fine grid -->
+  <rect width="900" height="280" fill="url(#finegrid)"/>
+  <!-- Main grid -->
+  <rect width="900" height="280" fill="url(#grid)"/>
+
+  <!-- Vignette -->
+  <radialGradient id="vig" cx="50%" cy="50%" r="70%">
+    <stop offset="0%" stop-color="transparent"/>
+    <stop offset="100%" stop-color="#000" stop-opacity="0.7"/>
+  </radialGradient>
+  <rect width="900" height="280" fill="url(#vig)"/>
+
+  <!-- Scanline sweep -->
+  <rect class="scanline" x="0" y="-40" width="900" height="40" fill="url(#scanGrad)"/>
+
+  <!-- ── CHART AREA ── -->
+  <g clip-path="url(#chartClip)">
+
+    <!-- Target range band 70-180 mg/dL -->
+    <!-- Map: 40mg=230px bottom, 300mg=20px top → range=260mg, height=210px, scale=0.808px/mg -->
+    <!-- 180mg → y= 230-(180-40)*0.808 = 230-113 = 117 -->
+    <!-- 70mg  → y= 230-(70-40)*0.808  = 230-24  = 206 -->
+    <rect x="60" y="117" width="720" height="89" fill="url(#rangeGrad)" rx="0"/>
+    <line x1="60" y1="117" x2="780" y2="117" stroke="#39ff14" stroke-width="0.5" stroke-dasharray="6,4" opacity="0.3"/>
+    <line x1="60" y1="206" x2="780" y2="206" stroke="#39ff14" stroke-width="0.5" stroke-dasharray="6,4" opacity="0.3"/>
+
+    <!-- Y-axis labels -->
+    <text x="52" y="121" font-family="'Share Tech Mono',monospace" font-size="8" fill="#39ff14" opacity="0.4" text-anchor="end">180</text>
+    <text x="52" y="210" font-family="'Share Tech Mono',monospace" font-size="8" fill="#39ff14" opacity="0.4" text-anchor="end">70</text>
+    <text x="52" y="50"  font-family="'Share Tech Mono',monospace" font-size="8" fill="#39ff14" opacity="0.25" text-anchor="end">300</text>
+    <text x="52" y="234" font-family="'Share Tech Mono',monospace" font-size="8" fill="#39ff14" opacity="0.25" text-anchor="end">40</text>
+
+    <!-- TIR label -->
+    <text x="420" y="166" font-family="'Share Tech Mono',monospace" font-size="9" fill="#39ff14" opacity="0.2" text-anchor="middle" letter-spacing="3">TARGET RANGE  70–180 mg/dL</text>
+
+    <!-- INSULIN delivery spikes (bottom) -->
+    <g opacity="0.5" filter="url(#glow)">
+      <line x1="210" y1="238" x2="210" y2="218" stroke="#00cfff" stroke-width="1.5"/>
+      <polygon points="210,214 207,220 213,220" fill="#00cfff"/>
+      <line x1="390" y1="238" x2="390" y2="223" stroke="#00cfff" stroke-width="1.5"/>
+      <polygon points="390,219 387,225 393,225" fill="#00cfff"/>
+      <line x1="590" y1="238" x2="590" y2="224" stroke="#00cfff" stroke-width="1"/>
+      <polygon points="590,220 587,226 593,226" fill="#00cfff"/>
+    </g>
+
+    <!-- CGM TRACE (main path) -->
+    <!-- Glucose scenario: starts 110, rises to 210 (meal spike), controller kicks in, drops to 85, recovers to 105 -->
+    <!-- Scale: y = 230 - (glucose - 40) * 0.808 -->
+    <!-- 110→ y=166, 210→y=95, 85→y=196, 105→y=180, 115→y=172 -->
+    <path class="cgm-path glow-line"
+      d="M60,166
+         C90,164 110,162 140,159
+         C165,156 180,148 210,131
+         C240,114 255,99 280,95
+         C300,92 310,93 325,97
+         C345,103 360,118 385,138
+         C405,153 415,168 430,181
+         C445,192 455,200 470,201
+         C485,202 495,199 510,196
+         C525,191 535,186 555,183
+         C575,180 590,178 615,176
+         C640,174 660,173 690,172
+         C720,171 750,170 780,169"
+      fill="none"
+      stroke="url(#traceGrad)"
+      stroke-width="2.5"
+      filter="url(#glow)"
+    />
+
+    <!-- Glow duplicate (softer, wider) -->
+    <path
+      d="M60,166
+         C90,164 110,162 140,159
+         C165,156 180,148 210,131
+         C240,114 255,99 280,95
+         C300,92 310,93 325,97
+         C345,103 360,118 385,138
+         C405,153 415,168 430,181
+         C445,192 455,200 470,201
+         C485,202 495,199 510,196
+         C525,191 535,186 555,183
+         C575,180 590,178 615,176
+         C640,174 660,173 690,172
+         C720,171 750,170 780,169"
+      fill="none"
+      stroke="#39ff14"
+      stroke-width="6"
+      opacity="0.08"
+    />
+
+    <!-- Peak annotation -->
+    <g class="fade-in-3">
+      <line x1="280" y1="95" x2="280" y2="72" stroke="#ff4d6d" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.6"/>
+      <circle cx="280" cy="95" r="3.5" fill="#ff4d6d" opacity="0.9" filter="url(#glow)"/>
+      <rect x="252" y="58" width="58" height="14" fill="#0a0f06" rx="2"/>
+      <text x="281" y="68" font-family="'Share Tech Mono',monospace" font-size="8" fill="#ff4d6d" text-anchor="middle" opacity="0.9">PEAK 210</text>
+    </g>
+
+    <!-- Safety intervention -->
+    <g class="fade-in-4">
+      <rect x="362" y="44" width="72" height="14" fill="#0a0f06" rx="2"/>
+      <text x="398" y="54" font-family="'Share Tech Mono',monospace" font-size="8" fill="#ffb347" text-anchor="middle" opacity="0.8">⬡ SAFETY CLIP</text>
+      <line x1="390" y1="58" x2="390" y2="138" stroke="#ffb347" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.4"/>
+    </g>
+
+    <!-- Live dot -->
+    <circle cx="780" cy="169" r="4" fill="#39ff14" filter="url(#strongglow)"/>
+    <circle class="pulse-ring" cx="780" cy="169" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" opacity="0"/>
+
+    <!-- Current reading -->
+    <g class="fade-in-4">
+      <text x="795" y="164" font-family="'Share Tech Mono',monospace" font-size="11" fill="#39ff14" filter="url(#glow)" opacity="0.9">112</text>
+      <text x="795" y="175" font-family="'Share Tech Mono',monospace" font-size="7" fill="#39ff14" opacity="0.45">mg/dL</text>
+    </g>
+
+  </g>
+
+  <!-- ── HUD ELEMENTS ── -->
+
+  <!-- Top-left: system ID -->
+  <g class="fade-in-1">
+    <text x="20" y="20" font-family="'Share Tech Mono',monospace" font-size="8" fill="#39ff14" opacity="0.3" letter-spacing="2">SWARM-BOLUS · SIM-ENGINE v3.0 · NON-CLINICAL</text>
+  </g>
+
+  <!-- Top-right: live metrics -->
+  <g class="fade-in-2">
+    <text x="880" y="20" font-family="'Share Tech Mono',monospace" font-size="8" fill="#39ff14" opacity="0.3" text-anchor="end" letter-spacing="1">TIR: 78.4% · SD: 28.1 · MEAN: 124</text>
+  </g>
+
+  <!-- Bottom bar -->
+  <g class="fade-in-2">
+    <line x1="0" y1="248" x2="900" y2="248" stroke="#39ff14" stroke-width="0.4" opacity="0.2"/>
+    <text x="20"  y="262" font-family="'Share Tech Mono',monospace" font-size="8" fill="#39ff14" opacity="0.25" letter-spacing="1">▲ INSULIN DELIVERY EVENTS</text>
+    <text x="420" y="262" font-family="'Share Tech Mono',monospace" font-size="8" fill="#00cfff" opacity="0.3" text-anchor="middle" letter-spacing="1">── CGM TRACE  ·  ── ── TARGET RANGE  ·  ▲ CONTROLLER OUTPUT</text>
+    <text x="880" y="262" font-family="'Share Tech Mono',monospace" font-size="8" fill="#39ff14" opacity="0.25" text-anchor="end" letter-spacing="1">SIM ONLY · NO CLINICAL USE</text>
+  </g>
+
+  <!-- ── MAIN TITLE OVERLAY (centered vertically in chart whitespace) ── -->
+  <!-- Title sits LEFT of chart, using the left margin as a panel -->
+  <!-- Actually let's overlay at top center above the chart -->
+
+  <!-- HERO TEXT - large, centered, overlaid -->
+  <g class="fade-in-1" filter="url(#textglow)">
+    <!-- SWARM in massive letters, top center -->
+    <text x="450" y="100" font-family="'Share Tech Mono',monospace" font-size="72" fill="#39ff14" text-anchor="middle" opacity="0.07" letter-spacing="20">SWARM</text>
+  </g>
+
+</svg>
