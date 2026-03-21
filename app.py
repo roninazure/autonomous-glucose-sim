@@ -14,9 +14,16 @@ if str(SRC_PATH) not in sys.path:
 
 import json
 
+from ags.evaluation.profile_sweep import build_sweep_export, run_profile_sweep
+from ags.evaluation.profiles import ALL_PROFILES
 from ags.evaluation.report import generate_report
 from ags.evaluation.runner import run_evaluation
 from ags.pump.state import PumpConfig
+from ags.explainability.annotator import annotate_run
+from ags.explainability.state import GATE_COLOURS, GATE_LABELS
+from ags.retrospective.loader import CgmParseError, parse_cgm_text, readings_to_csv
+from ags.retrospective.reference_traces import REFERENCE_TRACE_DESCRIPTIONS, REFERENCE_TRACES
+from ags.retrospective.runner import RetrospectiveConfig, run_retrospective
 from ags.safety.state import SafetyThresholds
 from ags.simulation.scenarios import (
     baseline_meal_scenario,
@@ -358,6 +365,108 @@ SCENARIO_DESCRIPTIONS = {
 }
 
 
+# ── Decision Timeline panel ───────────────────────────────────────────────────
+
+def decision_timeline_panel(
+    explanations: list,
+    key_suffix: str = "",
+) -> None:
+    """Render an expandable per-step decision timeline table + drill-down card.
+
+    Shows a colour-coded row per timestep (gate colour), a trend sparkline in
+    the table, and a detailed monospace card for the user-selected step.
+    """
+    if not explanations:
+        return
+
+    with st.expander("▶  DECISION TIMELINE", expanded=False):
+        # ── Build display DataFrame ─────────────────────────────────────
+        rows = []
+        gate_ids = []
+        for exp in explanations:
+            rows.append({
+                "t (min)": exp.timestamp_min,
+                "CGM": f"{exp.cgm_mgdl:.0f}",
+                "trend": f"{exp.trend_arrow} {exp.trend_rate_mgdl_per_min:+.1f}/min",
+                "pred +30": f"{exp.predicted_glucose_mgdl:.0f}",
+                "IOB (U)": f"{exp.iob_u:.2f}",
+                "rec'd (U)": f"{exp.recommended_units:.3f}",
+                "gate": GATE_LABELS.get(exp.safety_gate, exp.safety_gate),
+                "delivered (U)": f"{exp.delivered_units:.3f}",
+                "narrative": exp.narrative,
+            })
+            gate_ids.append(exp.safety_gate)
+
+        import pandas as _pd
+        _tl_df = _pd.DataFrame(rows)
+        _gate_id_series = gate_ids  # parallel list for styling
+
+        def _style_gate(row):
+            gate_id = _gate_id_series[row.name]
+            fg = GATE_COLOURS.get(gate_id, "#888888")
+            bg = f"{fg}22"
+            result = [""] * len(row)
+            try:
+                gate_idx = list(_tl_df.columns).index("gate")
+                result[gate_idx] = f"background-color:{bg}; color:{fg}; font-weight:700;"
+            except ValueError:
+                pass
+            return result
+
+        _styled = _tl_df.style.apply(_style_gate, axis=1)
+        st.dataframe(_styled, use_container_width=True, hide_index=True)
+
+        # ── Step drill-down ─────────────────────────────────────────────
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.55rem;
+                    color:{MUTED}; letter-spacing:3px; text-transform:uppercase;
+                    margin:1rem 0 0.4rem 0;">── STEP DRILL-DOWN</div>
+        """, unsafe_allow_html=True)
+
+        _ts_options = [f"t = {e.timestamp_min} min" for e in explanations]
+        _selected_label = st.selectbox(
+            "Select timestep",
+            _ts_options,
+            key=f"timeline_step_{key_suffix}",
+            label_visibility="collapsed",
+        )
+        _sel_idx = _ts_options.index(_selected_label)
+        _e = explanations[_sel_idx]
+
+        _gate_fg = GATE_COLOURS.get(_e.safety_gate, "#888888")
+        _gate_lbl = GATE_LABELS.get(_e.safety_gate, _e.safety_gate)
+        _susp_line = (
+            f"  suspension    : step {_e.suspension_step}\n"
+            if _e.is_suspended else ""
+        )
+
+        st.markdown(f"""
+<div style="background:{BG2}; border:1px solid {NEON_DIM}; border-left:3px solid {_gate_fg};
+            border-radius:3px; padding:1rem 1.25rem; margin-top:0.25rem;
+            font-family:'Share Tech Mono',monospace; font-size:0.72rem;
+            color:{WHITE}; line-height:1.9; white-space:pre;">
+<span style="color:{NEON_DIM}">┌─ t = {_e.timestamp_min} min ──────────────────────────────────────</span>
+<span style="color:{CYAN}">  cgm            : {_e.cgm_mgdl:.1f} mg/dL</span>
+<span style="color:{WHITE}">  trend           : {_e.trend_arrow}  {_e.trend_rate_mgdl_per_min:+.2f} mg/dL/min</span>
+<span style="color:{WHITE}">  predicted +{_e.prediction_horizon_min}   : {_e.predicted_glucose_mgdl:.1f} mg/dL</span>
+<span style="color:{WHITE}">  IOB             : {_e.iob_u:.3f} U</span>
+<span style="color:{NEON_DIM}">├─ controller ──────────────────────────────────────────────────</span>
+<span style="color:{WHITE}">  recommended     : {_e.recommended_units:.3f} U</span>
+<span style="color:{MUTED}">  reason          : {_e.controller_reason}</span>
+<span style="color:{NEON_DIM}">├─ safety ───────────────────────────────────────────────────────</span>
+<span style="color:{_gate_fg}">  gate            : {_gate_lbl}</span>
+<span style="color:{MUTED}">  reason          : {_e.safety_reason}</span>
+<span style="color:{WHITE}">  status          : {_e.safety_status}</span>
+<span style="color:{WHITE}">  final units     : {_e.safety_final_units:.3f} U</span>{_susp_line}
+<span style="color:{NEON_DIM}">├─ delivery ─────────────────────────────────────────────────────</span>
+<span style="color:{NEON}">  delivered       : {_e.delivered_units:.3f} U</span>
+<span style="color:{NEON_DIM}">├─ narrative ────────────────────────────────────────────────────</span>
+<span style="color:{WHITE}">  {_e.narrative}</span>
+<span style="color:{NEON_DIM}">└──────────────────────────────────────────────────────────────</span>
+</div>
+        """, unsafe_allow_html=True)
+
+
 # ── Scenario builder ─────────────────────────────────────────────────────────
 def build_scenario(name: str) -> SimulationInputs:
     if name == "Baseline Meal":
@@ -442,11 +551,66 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+    dashboard_mode = st.radio(
+        "Mode",
+        ["Comparison", "Profile Sweep", "Retrospective Replay"],
+        horizontal=False,
+        help="Comparison: side-by-side scenario A vs B.  "
+             "Profile Sweep: one scenario across all 4 patient archetypes.  "
+             "Retrospective Replay: run controller against a real CGM trace.",
+    )
+
     st.header("Scenarios")
-    scenario_a_name = st.selectbox("Scenario A", options=SCENARIO_OPTIONS, index=0)
-    st.caption(SCENARIO_DESCRIPTIONS.get(scenario_a_name, ""))
-    scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
-    st.caption(SCENARIO_DESCRIPTIONS.get(scenario_b_name, ""))
+    if dashboard_mode == "Comparison":
+        scenario_a_name = st.selectbox("Scenario A", options=SCENARIO_OPTIONS, index=0)
+        st.caption(SCENARIO_DESCRIPTIONS.get(scenario_a_name, ""))
+        scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
+        st.caption(SCENARIO_DESCRIPTIONS.get(scenario_b_name, ""))
+    elif dashboard_mode == "Profile Sweep":
+        sweep_scenario_name = st.selectbox("Sweep Scenario", options=SCENARIO_OPTIONS, index=0)
+        st.caption(SCENARIO_DESCRIPTIONS.get(sweep_scenario_name, ""))
+        scenario_a_name = sweep_scenario_name   # keep downstream code happy
+        scenario_b_name = sweep_scenario_name
+    else:  # Retrospective Replay
+        retro_source = st.radio("CGM Source", ["Reference trace", "Upload CSV", "Paste CSV"])
+        retro_trace_name: str | None = None
+        retro_uploaded_text: str | None = None
+
+        if retro_source == "Reference trace":
+            retro_trace_name = st.selectbox(
+                "Select trace",
+                options=list(REFERENCE_TRACES.keys()),
+            )
+            st.caption(REFERENCE_TRACE_DESCRIPTIONS.get(retro_trace_name, ""))
+        elif retro_source == "Upload CSV":
+            retro_file = st.file_uploader(
+                "Upload CGM CSV",
+                type=["csv", "txt"],
+                help="Simple: timestamp_min,glucose_mgdl  or  Dexcom G6/G7 Clarity export.",
+            )
+            if retro_file is not None:
+                retro_uploaded_text = retro_file.read().decode("utf-8", errors="replace")
+        else:  # Paste CSV
+            retro_uploaded_text = st.text_area(
+                "Paste CGM data (timestamp_min,glucose_mgdl)",
+                placeholder="timestamp_min,glucose_mgdl\n0,110\n5,115\n10,121\n...",
+                height=160,
+            )
+
+        st.header("Controller (Retro)")
+        retro_isf = st.slider(
+            "Correction factor (ISF, mg/dL/U)",
+            20.0, 120.0, 50.0, 1.0,
+            help="Estimated insulin sensitivity for this patient.",
+        )
+        retro_peak = st.selectbox(
+            "Insulin peak time (min)",
+            [55, 65, 75],
+            index=2,
+            help="55 = Fiasp, 65 = Humalog, 75 = NovoLog",
+        )
+        scenario_a_name = retro_trace_name or "Custom trace"
+        scenario_b_name = scenario_a_name
 
     st.header("Simulation")
     duration_minutes = st.slider("Duration (minutes)", 30, 360, 180, 30)
@@ -469,7 +633,13 @@ with st.sidebar:
     pump_max_units_per_interval = st.slider("Pump max units per interval", 0.1, 3.0, 1.0, 0.05)
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
-    run_button = st.button("▶  RUN COMPARISON", type="primary")
+    _btn_labels = {
+        "Comparison": "▶  RUN COMPARISON",
+        "Profile Sweep": "▶  RUN PROFILE SWEEP",
+        "Retrospective Replay": "▶  RUN RETROSPECTIVE REPLAY",
+    }
+    _btn_label = _btn_labels.get(dashboard_mode, "▶  RUN")
+    run_button = st.button(_btn_label, type="primary")
 
 # ── Results ──────────────────────────────────────────────────────────────────
 if run_button:
@@ -484,30 +654,383 @@ if run_button:
         max_units_per_interval=pump_max_units_per_interval,
     )
 
-    with st.spinner(""):
-        records_a, summary_a = run_evaluation(
-            simulation_inputs=build_scenario(scenario_a_name),
-            safety_thresholds=safety_thresholds,
-            pump_config=pump_config,
-            duration_minutes=duration_minutes,
-            step_minutes=step_minutes,
-            seed=42,
-            min_excursion_delta_mgdl=min_excursion_delta,
-            microbolus_fraction=microbolus_fraction,
-        )
-        records_b, summary_b = run_evaluation(
-            simulation_inputs=build_scenario(scenario_b_name),
-            safety_thresholds=safety_thresholds,
-            pump_config=pump_config,
-            duration_minutes=duration_minutes,
-            step_minutes=step_minutes,
-            seed=42,
-            min_excursion_delta_mgdl=min_excursion_delta,
-            microbolus_fraction=microbolus_fraction,
-        )
+    if dashboard_mode == "Retrospective Replay":
+        # ── Load readings ──────────────────────────────────────────────────
+        try:
+            if retro_source == "Reference trace" and retro_trace_name:
+                retro_readings = list(REFERENCE_TRACES[retro_trace_name])
+                _trace_label = retro_trace_name
+            elif retro_uploaded_text and retro_uploaded_text.strip():
+                retro_readings = parse_cgm_text(retro_uploaded_text)
+                _trace_label = "Custom trace"
+            else:
+                st.error("No CGM data provided. Select a reference trace or upload/paste a CSV.")
+                st.stop()
+        except CgmParseError as exc:
+            st.error(f"CGM parse error: {exc}")
+            st.stop()
 
-    df_a = pd.DataFrame([r.__dict__ for r in records_a])
-    df_b = pd.DataFrame([r.__dict__ for r in records_b])
+        retro_cfg = RetrospectiveConfig(
+            target_glucose_mgdl=110.0,
+            correction_factor_mgdl_per_unit=retro_isf,
+            min_excursion_delta_mgdl=min_excursion_delta,
+            microbolus_fraction=microbolus_fraction,
+            insulin_peak_minutes=float(retro_peak),
+        )
+        with st.spinner(""):
+            retro_records, retro_summary = run_retrospective(
+                readings=retro_readings,
+                config=retro_cfg,
+                safety_thresholds=safety_thresholds,
+                pump_config=pump_config,
+            )
+
+        retro_df = pd.DataFrame([r.__dict__ for r in retro_records])
+        _duration_min = retro_readings[-1].timestamp_min
+        _step_min = retro_readings[1].timestamp_min - retro_readings[0].timestamp_min
+
+        # ── Header ─────────────────────────────────────────────────────────
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                    letter-spacing:4px; text-transform:uppercase; margin-bottom:0.75rem;">
+          ── RETROSPECTIVE REPLAY · {_trace_label.upper()}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ── Metric row ─────────────────────────────────────────────────────
+        rc1, rc2, rc3, rc4, rc5, rc6 = st.columns(6)
+        rc1.metric("Time in Range", f"{retro_summary.percent_time_in_range:.1f}%")
+        rc2.metric("Avg CGM", f"{retro_summary.average_cgm_glucose_mgdl:.0f} mg/dL")
+        rc3.metric("Peak CGM", f"{retro_summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
+        rc4.metric("Delivered U", f"{retro_summary.total_insulin_delivered_u:.2f}")
+        rc5.metric("Blocked", retro_summary.blocked_decisions)
+        rc6.metric("Suspended", retro_summary.time_suspended_steps)
+
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+        # ── CGM trace + intervention markers ──────────────────────────────
+        _rCGM = go.Figure()
+        _rCGM.add_hrect(y0=70, y1=180, fillcolor="rgba(57,255,20,0.04)", line_width=0)
+        _rCGM.add_hline(y=70, line=dict(color=RED, width=1, dash="dot"),
+                        annotation=dict(text="HYPO 70", font=dict(color=RED, size=8), xanchor="left"))
+        _rCGM.add_hline(y=180, line=dict(color=AMBER, width=1, dash="dot"),
+                        annotation=dict(text="HYPER 180", font=dict(color=AMBER, size=8), xanchor="left"))
+        _rCGM.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
+                        annotation=dict(text="SEVERE 250", font=dict(color=RED, size=8), xanchor="left"))
+        _rCGM.add_trace(go.Scatter(
+            x=retro_df["timestamp_min"], y=retro_df["cgm_glucose_mgdl"],
+            mode="lines+markers", name="CGM Trace",
+            line=dict(color=NEON, width=2.5),
+            marker=dict(size=5, color=NEON),
+            hovertemplate="%{y:.1f} mg/dL<extra>CGM</extra>",
+        ))
+        # Dosing decisions as vertical annotations via scatter
+        _dose_df = retro_df[retro_df["pump_delivered_units"] > 0]
+        if not _dose_df.empty:
+            _rCGM.add_trace(go.Scatter(
+                x=_dose_df["timestamp_min"],
+                y=_dose_df["cgm_glucose_mgdl"],
+                mode="markers", name="Controller Dose",
+                marker=dict(
+                    symbol="triangle-down", size=14,
+                    color=CYAN, line=dict(width=1.5, color=CYAN),
+                ),
+                hovertemplate="t=%{x} min · dose at %{y:.1f} mg/dL<extra>Dose</extra>",
+            ))
+        _blocked_df = retro_df[retro_df["safety_status"] == "blocked"]
+        if not _blocked_df.empty:
+            _rCGM.add_trace(go.Scatter(
+                x=_blocked_df["timestamp_min"],
+                y=_blocked_df["cgm_glucose_mgdl"],
+                mode="markers", name="Blocked",
+                marker=dict(symbol="x", size=10, color=RED, line=dict(width=2, color=RED)),
+                hovertemplate="t=%{x} min — BLOCKED at %{y:.1f} mg/dL<extra>Blocked</extra>",
+            ))
+        _rCGM_layout = _layout(f"CGM TRACE · CONTROLLER DECISIONS", height=400)
+        _rCGM_layout["yaxis"]["title"] = "mg/dL"
+        _rCGM_layout["xaxis"]["title"] = "minutes"
+        _rCGM.update_layout(**_rCGM_layout)
+        st.plotly_chart(_rCGM, width="stretch")
+
+        # ── Insulin recommendation vs delivery ────────────────────────────
+        _rc1, _rc2 = st.columns([3, 2])
+        with _rc1:
+            _rIns = go.Figure()
+            _rIns.add_trace(go.Bar(
+                x=retro_df["timestamp_min"], y=retro_df["pump_delivered_units"],
+                name="Delivered", marker_color=NEON, opacity=0.9,
+                hovertemplate="%{y:.3f} U<extra>Delivered</extra>",
+            ))
+            _rIns.add_trace(go.Scatter(
+                x=retro_df["timestamp_min"], y=retro_df["recommended_units"],
+                mode="lines", name="Recommended",
+                line=dict(color=NEON_DIM, width=1.5, dash="dot"),
+                hovertemplate="%{y:.3f} U<extra>Recommended</extra>",
+            ))
+            _rIns_layout = _layout("HYPOTHETICAL INSULIN DELIVERY", height=280)
+            _rIns_layout["yaxis"]["title"] = "units"
+            _rIns_layout["xaxis"]["title"] = "minutes"
+            _rIns_layout["barmode"] = "overlay"
+            _rIns.update_layout(**_rIns_layout)
+            st.plotly_chart(_rIns, width="stretch")
+        with _rc2:
+            _rIOB = go.Figure()
+            _rIOB.add_trace(go.Scatter(
+                x=retro_df["timestamp_min"], y=retro_df["insulin_on_board_u"],
+                mode="lines", name="IOB",
+                line=dict(color=CYAN, width=2),
+                fill="tozeroy", fillcolor="rgba(0,245,255,0.07)",
+                hovertemplate="%{y:.3f} U<extra>IOB</extra>",
+            ))
+            _rIOB_layout = _layout("HYPOTHETICAL IOB", height=280)
+            _rIOB_layout["yaxis"]["title"] = "IOB (U)"
+            _rIOB_layout["xaxis"]["title"] = "minutes"
+            _rIOB.update_layout(**_rIOB_layout)
+            st.plotly_chart(_rIOB, width="stretch")
+
+        # ── Report + export ────────────────────────────────────────────────
+        _retro_report = generate_report(
+            scenario_name=_trace_label,
+            summary=retro_summary,
+            duration_minutes=_duration_min,
+            step_minutes=int(_step_min),
+            safety_thresholds=safety_thresholds,
+            pump_config=pump_config,
+            correction_factor_mgdl_per_unit=retro_isf,
+            min_excursion_delta_mgdl=min_excursion_delta,
+            microbolus_fraction=microbolus_fraction,
+        )
+        _retro_report["retrospective"] = True
+        _retro_report["trace_points"] = len(retro_readings)
+        _retro_report["insulin_peak_minutes"] = float(retro_peak)
+
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                    letter-spacing:4px; text-transform:uppercase; margin:1rem 0 0.5rem 0;">
+          ── RETROSPECTIVE REPORT EXPORT
+        </div>
+        """, unsafe_allow_html=True)
+        _rpass = _retro_report["verdicts"]["overall_pass"]
+        _rcolor = NEON if _rpass else RED
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem;
+                    color:{_rcolor}; margin-bottom:0.5rem;">
+          {"✓ PASS" if _rpass else "✗ FAIL"} &nbsp;·&nbsp;
+          TIR {"✓" if _retro_report["verdicts"]["tir_pass"] else "✗"} &nbsp;·&nbsp;
+          Peak {"✓" if _retro_report["verdicts"]["peak_pass"] else "✗"} &nbsp;·&nbsp;
+          Hypo {"✓" if _retro_report["verdicts"]["hypo_pass"] else "✗"} &nbsp;·&nbsp;
+          SD {"✓" if _retro_report["verdicts"]["variability_pass"] else "✗"}
+        </div>
+        """, unsafe_allow_html=True)
+        _rex1, _rex2 = st.columns(2)
+        with _rex1:
+            st.download_button(
+                label="↓  EXPORT RETROSPECTIVE REPORT (JSON)",
+                data=json.dumps(_retro_report, indent=2),
+                file_name=f"swarm_retro_{_trace_label.lower()[:30].replace(' ', '_')}.json",
+                mime="application/json",
+            )
+        with _rex2:
+            st.download_button(
+                label="↓  EXPORT TRACE AS CSV",
+                data=readings_to_csv(retro_readings),
+                file_name=f"cgm_trace_{_trace_label.lower()[:30].replace(' ', '_')}.csv",
+                mime="text/csv",
+            )
+
+        # ── Decision Timeline ──────────────────────────────────────────────
+        retro_exps = annotate_run(
+            retro_records,
+            seed_glucose_mgdl=retro_readings[0].glucose_mgdl,
+            target_glucose_mgdl=retro_cfg.target_glucose_mgdl,
+            correction_factor_mgdl_per_unit=retro_cfg.correction_factor_mgdl_per_unit,
+            min_excursion_delta_mgdl=retro_cfg.min_excursion_delta_mgdl,
+            microbolus_fraction=retro_cfg.microbolus_fraction,
+            safety_thresholds=safety_thresholds,
+            step_minutes=int(_step_min),
+        )
+        decision_timeline_panel(retro_exps, key_suffix="retro")
+
+        st.stop()
+
+    elif dashboard_mode == "Profile Sweep":
+        _sweep_common = dict(
+            safety_thresholds=safety_thresholds,
+            pump_config=pump_config,
+            duration_minutes=duration_minutes,
+            step_minutes=step_minutes,
+            seed=42,
+            min_excursion_delta_mgdl=min_excursion_delta,
+            microbolus_fraction=microbolus_fraction,
+        )
+        with st.spinner(""):
+            sweep_results = run_profile_sweep(
+                base_scenario=build_scenario(sweep_scenario_name),
+                scenario_name=sweep_scenario_name,
+                **_sweep_common,
+            )
+
+        # ── Profile Sweep results ─────────────────────────────────────────
+        _PROFILE_COLORS = ["#39ff14", "#ff4d6d", "#ffbe0b", "#00f5ff"]
+
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                    letter-spacing:4px; text-transform:uppercase; margin-bottom:0.75rem;">
+          ── PROFILE SWEEP · {sweep_scenario_name.upper()}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Overall population pass/fail banner
+        _all_pass = all(r.report["verdicts"]["overall_pass"] for r in sweep_results)
+        _pop_color = NEON if _all_pass else RED
+        _pop_text = "◉ POPULATION PASS — all profiles meet ADA/EASD targets" \
+            if _all_pass else "⚠ POPULATION FAIL — one or more profiles outside targets"
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem;
+                    color:{_pop_color}; border:1px solid {_pop_color};
+                    padding:0.5rem 1rem; margin-bottom:1rem; letter-spacing:2px;">
+          {_pop_text}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Per-profile metric cards
+        _pcols = st.columns(4)
+        for _i, _sr in enumerate(sweep_results):
+            _pc = _PROFILE_COLORS[_i]
+            _pv = _sr.report["verdicts"]
+            _ppass = "✓ PASS" if _pv["overall_pass"] else "✗ FAIL"
+            with _pcols[_i]:
+                st.markdown(f"""
+                <div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+                            color:{_pc}; border-left:3px solid {_pc};
+                            padding-left:0.6rem; margin-bottom:0.4rem; letter-spacing:1px;">
+                  {_sr.profile.name.upper()}<br/>
+                  <span style="font-size:0.55rem; color:{MUTED};">{_sr.profile.description}</span>
+                </div>
+                """, unsafe_allow_html=True)
+                st.metric("TIR", f"{_sr.summary.percent_time_in_range:.1f}%")
+                st.metric("Peak CGM", f"{_sr.summary.peak_cgm_glucose_mgdl:.0f} mg/dL")
+                st.metric("Avg CGM", f"{_sr.summary.average_cgm_glucose_mgdl:.0f} mg/dL")
+                st.metric("Glucose SD", f"{_sr.summary.glucose_variability_sd_mgdl:.1f}")
+                _tir_v = "✓" if _pv["tir_pass"] else "✗"
+                _pk_v = "✓" if _pv["peak_pass"] else "✗"
+                _hy_v = "✓" if _pv["hypo_pass"] else "✗"
+                _sd_v = "✓" if _pv["variability_pass"] else "✗"
+                st.markdown(f"""
+                <div style="font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+                            color:{_pc if _pv["overall_pass"] else RED}; margin-top:0.3rem;">
+                  {_ppass} &nbsp;·&nbsp; TIR {_tir_v} &nbsp;·&nbsp; Peak {_pk_v}
+                  &nbsp;·&nbsp; Hypo {_hy_v} &nbsp;·&nbsp; SD {_sd_v}
+                </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+        # 4-trace CGM chart
+        _cgm_fig = go.Figure()
+        _cgm_fig.add_hrect(y0=70, y1=180, fillcolor="rgba(57,255,20,0.04)", line_width=0)
+        _cgm_fig.add_hline(y=70, line=dict(color=RED, width=1, dash="dot"),
+                           annotation=dict(text="HYPO 70", font=dict(color=RED, size=8), xanchor="left"))
+        _cgm_fig.add_hline(y=180, line=dict(color=AMBER, width=1, dash="dot"),
+                           annotation=dict(text="HYPER 180", font=dict(color=AMBER, size=8), xanchor="left"))
+        _cgm_fig.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
+                           annotation=dict(text="SEVERE 250", font=dict(color=RED, size=8), xanchor="left"))
+        for _i, _sr in enumerate(sweep_results):
+            _df_p = pd.DataFrame([r.__dict__ for r in _sr.records])
+            _cgm_fig.add_trace(go.Scatter(
+                x=_df_p["timestamp_min"], y=_df_p["cgm_glucose_mgdl"],
+                mode="lines", name=_sr.profile.name,
+                line=dict(color=_PROFILE_COLORS[_i], width=2),
+                hovertemplate="%{y:.1f} mg/dL<extra>" + _sr.profile.name + "</extra>",
+            ))
+        _cgm_layout = _layout(f"CGM TRAJECTORY · {sweep_scenario_name.upper()}", height=380)
+        _cgm_layout["yaxis"]["title"] = "mg/dL"
+        _cgm_layout["xaxis"]["title"] = "minutes"
+        _cgm_fig.update_layout(**_cgm_layout)
+        st.plotly_chart(_cgm_fig, width="stretch")
+
+        # Insulin delivery chart (4 bars)
+        _ins_fig = go.Figure()
+        for _i, _sr in enumerate(sweep_results):
+            _df_p = pd.DataFrame([r.__dict__ for r in _sr.records])
+            _ins_fig.add_trace(go.Bar(
+                x=_df_p["timestamp_min"], y=_df_p["pump_delivered_units"],
+                name=_sr.profile.name,
+                marker_color=_PROFILE_COLORS[_i], opacity=0.75,
+                hovertemplate="%{y:.3f} U<extra>" + _sr.profile.name + "</extra>",
+            ))
+        _ins_layout = _layout("INSULIN DELIVERY PER PROFILE", height=280)
+        _ins_layout["yaxis"]["title"] = "units"
+        _ins_layout["xaxis"]["title"] = "minutes"
+        _ins_layout["barmode"] = "group"
+        _ins_fig.update_layout(**_ins_layout)
+        st.plotly_chart(_ins_fig, width="stretch")
+
+        # Summary table
+        with st.expander("FULL METRICS TABLE", expanded=False):
+            _tbl_data = {
+                "Metric": [
+                    "Time in Range %", "Avg CGM (mg/dL)", "Peak CGM (mg/dL)",
+                    "Glucose SD (mg/dL)", "Time Below 70 (steps)", "Time Above 250 (steps)",
+                    "Delivered Insulin (U)", "Blocked Decisions", "Suspended Steps",
+                ],
+            }
+            for _sr in sweep_results:
+                _s = _sr.summary
+                _tbl_data[_sr.profile.name] = [
+                    _s.percent_time_in_range,
+                    _s.average_cgm_glucose_mgdl,
+                    _s.peak_cgm_glucose_mgdl,
+                    _s.glucose_variability_sd_mgdl,
+                    _s.time_below_range_steps,
+                    _s.time_above_250_steps,
+                    _s.total_insulin_delivered_u,
+                    _s.blocked_decisions,
+                    _s.time_suspended_steps,
+                ]
+            st.dataframe(pd.DataFrame(_tbl_data), hide_index=True, width="stretch")
+
+        # Combined export
+        st.markdown(f"""
+        <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                    letter-spacing:4px; text-transform:uppercase; margin:1rem 0 0.5rem 0;">
+          ── SWEEP REPORT EXPORT
+        </div>
+        """, unsafe_allow_html=True)
+        _sweep_export = build_sweep_export(sweep_scenario_name, sweep_results)
+        st.download_button(
+            label="↓  EXPORT COMBINED SWEEP REPORT (JSON)",
+            data=json.dumps(_sweep_export, indent=2),
+            file_name=f"swarm_sweep_{sweep_scenario_name.lower().replace(' ', '_')}.json",
+            mime="application/json",
+        )
+        st.stop()  # Comparison code below must not run in sweep mode
+
+    else:  # Comparison mode
+        with st.spinner(""):
+            records_a, summary_a = run_evaluation(
+                simulation_inputs=build_scenario(scenario_a_name),
+                safety_thresholds=safety_thresholds,
+                pump_config=pump_config,
+                duration_minutes=duration_minutes,
+                step_minutes=step_minutes,
+                seed=42,
+                min_excursion_delta_mgdl=min_excursion_delta,
+                microbolus_fraction=microbolus_fraction,
+            )
+            records_b, summary_b = run_evaluation(
+                simulation_inputs=build_scenario(scenario_b_name),
+                safety_thresholds=safety_thresholds,
+                pump_config=pump_config,
+                duration_minutes=duration_minutes,
+                step_minutes=step_minutes,
+                seed=42,
+                min_excursion_delta_mgdl=min_excursion_delta,
+                microbolus_fraction=microbolus_fraction,
+            )
+
+        df_a = pd.DataFrame([r.__dict__ for r in records_a])
+        df_b = pd.DataFrame([r.__dict__ for r in records_b])
 
     # ── Scenario metric panels ────────────────────────────────────────────
     st.markdown(f"""
@@ -758,6 +1281,44 @@ if run_button:
             mime="application/json",
         )
 
+    # ── Decision Timelines (Scenario A then B) ────────────────────────────
+    _cfg_a = build_scenario(scenario_a_name)
+    _cfg_b = build_scenario(scenario_b_name)
+    _exps_a = annotate_run(
+        records_a,
+        seed_glucose_mgdl=140.0,
+        target_glucose_mgdl=110.0,
+        correction_factor_mgdl_per_unit=_cfg_a.insulin_sensitivity_mgdl_per_unit,
+        min_excursion_delta_mgdl=min_excursion_delta,
+        microbolus_fraction=microbolus_fraction,
+        safety_thresholds=safety_thresholds,
+        step_minutes=step_minutes,
+    )
+    _exps_b = annotate_run(
+        records_b,
+        seed_glucose_mgdl=140.0,
+        target_glucose_mgdl=110.0,
+        correction_factor_mgdl_per_unit=_cfg_b.insulin_sensitivity_mgdl_per_unit,
+        min_excursion_delta_mgdl=min_excursion_delta,
+        microbolus_fraction=microbolus_fraction,
+        safety_thresholds=safety_thresholds,
+        step_minutes=step_minutes,
+    )
+    st.markdown(f"""
+    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                letter-spacing:4px; text-transform:uppercase; margin:1.5rem 0 0.25rem 0;">
+      ── SCENARIO A · DECISION TIMELINE
+    </div>
+    """, unsafe_allow_html=True)
+    decision_timeline_panel(_exps_a, key_suffix="comp_a")
+    st.markdown(f"""
+    <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
+                letter-spacing:4px; text-transform:uppercase; margin:0.75rem 0 0.25rem 0;">
+      ── SCENARIO B · DECISION TIMELINE
+    </div>
+    """, unsafe_allow_html=True)
+    decision_timeline_panel(_exps_b, key_suffix="comp_b")
+
     st.markdown(f"""
     <div style="margin-top:1rem;">
       <div style="font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:{MUTED};
@@ -790,9 +1351,9 @@ else:
         </div>
         <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:{MUTED};
                     letter-spacing:2px; text-transform:uppercase; line-height:2;">
-          Select scenarios in the sidebar<br/>
+          Select a mode in the sidebar<br/>
           Configure safety &amp; pump parameters<br/>
-          Press <span style="color:{NEON}">▶ RUN COMPARISON</span> to simulate
+          Press <span style="color:{NEON}">▶ RUN</span> to simulate
         </div>
       </div>
     </div>
