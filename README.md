@@ -6,6 +6,12 @@
 
 <div align="center">
 
+![Build Status](assets/status.svg)
+
+</div>
+
+<div align="center">
+
 ![Phase](https://img.shields.io/badge/Phase_4-Clinical_Evidence-39ff14?style=flat-square&labelColor=050a06&color=39ff14)
 ![Status](https://img.shields.io/badge/Status-Active_Development-39ff14?style=flat-square&labelColor=050a06)
 ![Boundary](https://img.shields.io/badge/⬡_Boundary-Simulation_Only-ff4d6d?style=flat-square&labelColor=050a06)
