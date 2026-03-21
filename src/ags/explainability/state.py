@@ -51,13 +51,13 @@ def gate_from_reason(reason: str, is_suspended: bool) -> str:
 # ── Gate display metadata ─────────────────────────────────────────────────────
 
 GATE_LABELS: dict[str, str] = {
-    GATE_NO_DOSE:            "no dose",
-    GATE_TREND_CONFIRMATION: "unconfirmed trend",
-    GATE_HYPO_GUARD:         "hypo guard",
-    GATE_IOB_GUARD:          "IOB guard",
-    GATE_MAX_INTERVAL_CAP:   "clipped",
-    GATE_ALLOWED:            "allowed ✓",
-    GATE_SUSPENSION:         "SUSPENSION",
+    GATE_NO_DOSE:            "No dose needed",
+    GATE_TREND_CONFIRMATION: "Trend not yet confirmed",
+    GATE_HYPO_GUARD:         "Hypoglycaemia risk — withheld",
+    GATE_IOB_GUARD:          "Active insulin too high — withheld",
+    GATE_MAX_INTERVAL_CAP:   "Dose capped at safety limit",
+    GATE_ALLOWED:            "Approved ✓",
+    GATE_SUSPENSION:         "Dosing suspended",
 }
 
 GATE_COLOURS: dict[str, str] = {
