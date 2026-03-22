@@ -123,7 +123,7 @@ def run_retrospective(
             ror_tiered_microbolus=config.ror_tiered_microbolus,
         )
 
-        signal, prediction, recommendation = run_controller(controller_inputs)
+        signal, prediction, recommendation, _meal_signal = run_controller(controller_inputs)
 
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,

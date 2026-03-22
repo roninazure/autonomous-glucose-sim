@@ -11,7 +11,7 @@ def test_run_controller_returns_expected_recommendation_for_rising_glucose() -> 
         correction_factor_mgdl_per_unit=50.0,
     )
 
-    signal, prediction, recommendation = run_controller(inputs)
+    signal, prediction, recommendation, _classification = run_controller(inputs)
 
     assert signal.glucose_delta_mgdl == 10.0
     assert signal.rising is True

@@ -253,6 +253,61 @@ def _layout(title: str = "", height: int = 320) -> dict:
 
 
 # ── Chart builders ───────────────────────────────────────────────────────────
+def _vrect_bands(
+    fig: go.Figure,
+    df: pd.DataFrame,
+    phase_col: str,
+    active_values: list[str],
+    color: str,
+    opacity: float,
+    label: str,
+) -> None:
+    """Group consecutive rows matching active_values into shaded vrect bands."""
+    if phase_col not in df.columns:
+        return
+    in_band = False
+    band_start = None
+    first_band = True
+    for _, row in df.iterrows():
+        active = row[phase_col] in active_values
+        if active and not in_band:
+            band_start = row["timestamp_min"]
+            in_band = True
+        elif not active and in_band:
+            fig.add_vrect(
+                x0=band_start, x1=row["timestamp_min"],
+                fillcolor=color, opacity=opacity, line_width=0,
+                **(dict(
+                    annotation_text=label,
+                    annotation_position="top left",
+                    annotation_font=dict(size=8, color=color),
+                ) if first_band else {}),
+            )
+            first_band = False
+            in_band = False
+    if in_band and band_start is not None:
+        fig.add_vrect(
+            x0=band_start, x1=df["timestamp_min"].iloc[-1],
+            fillcolor=color, opacity=opacity, line_width=0,
+        )
+
+
+def _add_meal_detection_annotations(fig: go.Figure, df: pd.DataFrame, color: str) -> None:
+    """Overlay autonomous meal detection events on a CGM chart."""
+    _vrect_bands(fig, df, "meal_phase", ["onset"], color, 0.10, "meal detected")
+
+
+def _add_drift_annotations(fig: go.Figure, df: pd.DataFrame, color: str) -> None:
+    """Overlay basal drift detection windows on a CGM chart."""
+    if "basal_drift_detected" not in df.columns:
+        return
+    _vrect_bands(
+        fig, df, "basal_drift_type",
+        ["sustained", "dawn", "rebound"],
+        color, 0.08, "basal drift",
+    )
+
+
 def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) -> go.Figure:
     fig = go.Figure()
 
@@ -268,6 +323,13 @@ def cgm_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: str) 
                   annotation=dict(text="High  180", font=dict(color=AMBER, size=9, family="Inter"), xanchor="left"))
     fig.add_hline(y=250, line=dict(color=RED, width=1.5, dash="dash"),
                   annotation=dict(text="Very High  250", font=dict(color=RED, size=9, family="Inter"), xanchor="left"))
+
+    # Autonomous detection bands — shaded regions where the system
+    # inferred the cause of a glucose rise without being told
+    _add_meal_detection_annotations(fig, df_a, NEON)
+    _add_meal_detection_annotations(fig, df_b, CYAN)
+    _add_drift_annotations(fig, df_a, "#ff9500")   # amber for drift on A
+    _add_drift_annotations(fig, df_b, "#cc7700")   # darker amber for drift on B
 
     fig.add_trace(go.Scatter(
         x=df_a["timestamp_min"], y=df_a["cgm_glucose_mgdl"],
@@ -771,31 +833,49 @@ with st.sidebar:
     )
 
     st.header("Patient Profile")
-    _use_weight_isf = st.checkbox(
-        "Estimate insulin sensitivity from weight",
-        value=False,
-        help="Uses the 1700 Rule: ISF = 1700 ÷ total daily dose, "
-             "where total daily dose ≈ body weight (kg) × 0.55. "
-             "You can override the result manually.",
+
+    _autonomous_isf = st.checkbox(
+        "Autonomous mode — infer sensitivity from glucose dynamics",
+        value=True,
+        help="The system watches how fast glucose is spiking and automatically infers "
+             "insulin sensitivity from that signal — no ISF input required.\n\n"
+             "Fast spike (≥3 mg/dL/min) → patient is insulin resistant → system doses more aggressively.\n"
+             "Slow/flat rise → patient is sensitive → system doses conservatively.\n\n"
+             "This is the artificial-pancreas / Tesla model: no pre-programmed sensitivity number needed.",
     )
-    _weight_kg = st.slider(
-        "Body weight (kg)",
-        30.0, 150.0, 70.0, 1.0,
-    )
-    if _use_weight_isf:
-        _auto_isf = estimate_isf_from_weight(_weight_kg)
+
+    if _autonomous_isf:
         st.caption(
-            f"Estimated sensitivity: **{_auto_isf:.1f} mg/dL per unit**  "
-            f"(daily dose ≈ {_weight_kg * 0.55:.1f} U)"
+            "Sensitivity is inferred automatically from the rate of glucose rise. "
+            "No manual ISF input required."
         )
-        correction_factor_mgdl_per_unit = _auto_isf
+        correction_factor_mgdl_per_unit = 50.0  # fallback value, ignored in autonomous mode
     else:
-        correction_factor_mgdl_per_unit = st.slider(
-            "Insulin sensitivity — mg/dL drop per unit",
-            20.0, 120.0, 50.0, 1.0,
-            help="How much blood glucose drops per unit of insulin for this patient. "
-                 "30 = insulin resistant, 50 = typical adult, 85 = highly sensitive.",
+        _use_weight_isf = st.checkbox(
+            "Estimate insulin sensitivity from weight",
+            value=False,
+            help="Uses the 1700 Rule: ISF = 1700 ÷ total daily dose, "
+                 "where total daily dose ≈ body weight (kg) × 0.55. "
+                 "You can override the result manually.",
         )
+        _weight_kg = st.slider(
+            "Body weight (kg)",
+            30.0, 150.0, 70.0, 1.0,
+        )
+        if _use_weight_isf:
+            _auto_isf = estimate_isf_from_weight(_weight_kg)
+            st.caption(
+                f"Estimated sensitivity: **{_auto_isf:.1f} mg/dL per unit**  "
+                f"(daily dose ≈ {_weight_kg * 0.55:.1f} U)"
+            )
+            correction_factor_mgdl_per_unit = _auto_isf
+        else:
+            correction_factor_mgdl_per_unit = st.slider(
+                "Insulin sensitivity — mg/dL drop per unit",
+                20.0, 120.0, 50.0, 1.0,
+                help="How much blood glucose drops per unit of insulin for this patient. "
+                     "30 = insulin resistant, 50 = typical adult, 85 = highly sensitive.",
+            )
 
     st.header("Safety Limits")
     max_units_per_interval = st.slider(
@@ -1139,6 +1219,7 @@ if run_button:
             min_excursion_delta_mgdl=min_excursion_delta,
             microbolus_fraction=microbolus_fraction,
             ror_tiered_microbolus=_ror_tiered,
+            autonomous_isf=_autonomous_isf,
             dual_wave_config=dual_wave_config,
         )
         with st.spinner(""):
@@ -1297,6 +1378,7 @@ if run_button:
                 min_excursion_delta_mgdl=min_excursion_delta,
                 microbolus_fraction=microbolus_fraction,
                 ror_tiered_microbolus=_ror_tiered,
+                autonomous_isf=_autonomous_isf,
                 dual_wave_config=dual_wave_config,
             )
             records_b, summary_b = run_evaluation(
@@ -1310,6 +1392,7 @@ if run_button:
                 min_excursion_delta_mgdl=min_excursion_delta,
                 microbolus_fraction=microbolus_fraction,
                 ror_tiered_microbolus=_ror_tiered,
+                autonomous_isf=_autonomous_isf,
                 dual_wave_config=dual_wave_config,
             )
 

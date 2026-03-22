@@ -18,6 +18,22 @@ class TimestepRecord:
     dual_wave_extended_units: float = 0.0
     # Observed rate of rise at this timestep in mg/dL/min
     rate_mgdl_per_min: float = 0.0
+    # Autonomous glucose dynamics classification
+    meal_detected: bool = False
+    meal_phase: str = "none"
+    meal_estimated_carbs_g: float = 0.0
+    meal_confidence: float = 0.0
+    basal_drift_detected: bool = False
+    basal_drift_type: str = "none"
+    basal_drift_rate_mgdl_per_min: float = 0.0
+    basal_drift_linearity: float = 0.0
+    glucose_cause: str = "flat"      # GlucoseCause enum value
+    # Human-readable reason string from the recommender — useful for debugging
+    # and for tracking when the online ISF estimate is influencing decisions.
+    recommendation_reason: str = ""
+    # Number of observed dose→response pairs used by the online ISF learner at
+    # this timestep.  Starts at 0 and grows as 60-min post-dose windows mature.
+    isf_observation_count: int = 0
 
 
 @dataclass

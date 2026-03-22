@@ -107,7 +107,7 @@ def annotate_run(
             step_minutes=step_minutes,
         )
 
-        signal, prediction, recommendation = run_controller(controller_inputs)
+        signal, prediction, recommendation, _meal_signal = run_controller(controller_inputs)
 
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,

@@ -11,7 +11,7 @@ def run_controller_with_safety(
     controller_inputs: ControllerInputs,
     safety_thresholds: SafetyThresholds | None = None,
 ) -> tuple[ExcursionSignal, GlucosePrediction, CorrectionRecommendation, SafetyDecision]:
-    signal, prediction, recommendation = run_controller(controller_inputs)
+    signal, prediction, recommendation, _meal_signal = run_controller(controller_inputs)
 
     safety_inputs = build_safety_inputs(
         recommendation=recommendation,
