@@ -52,6 +52,11 @@ class ControllerInputs:
     # The recommender uses this to fire a pre-bolus on ONSET and to scale the
     # correction dose appropriately throughout the post-prandial window.
     meal_signal: MealSignal | None = None
+    # Set to True by the runner once a pre-bolus has been fired for the
+    # current meal event.  Prevents the recommender from re-firing on every
+    # consecutive ONSET step of the same meal.  Reset by the runner when the
+    # meal signal returns to NONE (meal over).
+    prebolus_already_fired: bool = False
 
 
 @dataclass

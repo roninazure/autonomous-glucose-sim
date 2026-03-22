@@ -153,9 +153,17 @@ def recommend_correction(
         effective_isf = _refine_isf_from_observations(base_isf, inputs.isf_observations)
 
         # ── MEAL ONSET: first-phase pre-bolus ────────────────────────────────
+        # Fire exactly once per meal event.  The runner sets
+        # prebolus_already_fired=True after the first pre-bolus and resets it
+        # when the meal signal returns to NONE so the next meal can fire again.
         meal = classification.meal_signal
         if cause in (GlucoseCause.MEAL, GlucoseCause.MIXED):
-            if meal is not None and meal.recommend_prebolus and meal.estimated_carbs_g > 0:
+            if (
+                meal is not None
+                and meal.recommend_prebolus
+                and meal.estimated_carbs_g > 0
+                and not inputs.prebolus_already_fired
+            ):
                 pre_units = _prebolus_units(meal.estimated_carbs_g, effective_isf)
                 return CorrectionRecommendation(
                     recommended_units=pre_units,
