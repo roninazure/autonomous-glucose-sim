@@ -44,10 +44,11 @@
 
 SWARM Bolus is a **closed-loop simulation stack** that mirrors a real AID system architecture exactly — with every component replaceable by its hardware counterpart once pre-clinical validation is complete.
 
-The dashboard offers three evaluation modes:
+The dashboard offers four evaluation modes:
 
 | Mode | Description |
 |:--|:--|
+| **⬡ Closed Loop Demo** | **The artificial pancreas loop made visible.** Delivered insulin changes the glucose trajectory in real time. Shows no-treatment vs autonomous control side by side — same patient, same meal, zero manual input. |
 | **Comparison** | Side-by-side A vs B: same algorithm, different clinical conditions. Produces comparative metrics and an AI-generated plain-English verdict. |
 | **Profile Sweep** | One scenario across all 4 patient archetypes (standard, insulin-resistant, sensitive, rapid-onset). |
 | **Retrospective Replay** | Load a real CGM trace (or a built-in reference pattern) and replay the controller against it. See what it *would have decided* — without affecting the actual glucose trajectory. |
@@ -70,6 +71,7 @@ The dashboard offers three evaluation modes:
 | **Safety Layer** | IOB tracking, hypo prediction, stateful suspension logic, hard clamps. Blocks or clips unsafe dosing |
 | **Pump Abstraction** | Delivery rate limits, dual-wave (split) bolus state machine, quantisation |
 | **Evaluation Engine** | Clinical metrics, scenario comparison, AI-generated verdict, Streamlit dashboard |
+| **Closed-Loop Runner** | `run_closed_loop_evaluation` — true feedback loop: each pump delivery is fed back into `advance_physiology` so delivered insulin changes subsequent glucose |
 | **Retrospective Engine** | Loads real or reference CGM traces; replays controller with hypothetical IOB accumulation |
 | **Explainability Engine** | Per-step `DecisionExplanation`: gate fired, reason, narrative. Rendered in interactive Decision Timeline |
 
@@ -194,6 +196,33 @@ Seven named safety gates — colour-coded in the timeline table:
 
 ---
 
+## Closed Loop Demo
+
+Select **⬡ Closed Loop Demo** in the dashboard sidebar to see the full artificial pancreas loop:
+
+```
+CGM reading → controller → safety check → pump delivery
+     ↑                                          ↓
+  next glucose ← advance_physiology(dose) ←←←←←←
+```
+
+Every green data point on the chart was produced by the algorithm delivering insulin that **actually suppressed the glucose** — no pre-programming, no manual override.
+
+| Scenario | No treatment | Autonomous control |
+|:--|:--|:--|
+| Baseline Meal (45g carbs) | 247 mg/dL peak | 200 mg/dL · 3.8 U delivered |
+| Dawn Phenomenon (drift) | Unchecked rise | 100% time in range · 0.7 U |
+| Missed Bolus (75g carbs) | 305+ mg/dL | Controller detects & corrects |
+
+**What the demo screen shows:**
+- Red dashed trace — no treatment; glucose goes where physics takes it
+- Green solid trace — autonomous control; algorithm decides, pump delivers, glucose responds
+- Blue triangles — every autonomous delivery, timestamp and dose
+- Four metric cards — peak glucose delta, time in range %, total insulin
+- Expandable per-step decision table (controller reason, meal phase, IOB)
+
+---
+
 ## Retrospective Replay
 
 Load a real CGM trace and replay the controller against it:
@@ -253,10 +282,10 @@ src/
     ├── retrospective/    <- CGM trace loader · reference traces · replay runner
     └── explainability/   <- DecisionExplanation · gate annotator · narrative generator
 
-tests/                    <- 219 tests, all passing
+tests/                    <- 223 tests, all passing
 docs/
 experiments/
-app.py                    <- Streamlit dashboard (Comparison · Profile Sweep · Retrospective Replay)
+app.py                    <- Streamlit dashboard (Closed Loop Demo · Comparison · Profile Sweep · Retrospective Replay)
 ```
 
 ---
@@ -295,6 +324,7 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <details>
 <summary><b>04 · Clinical Evidence ✓</b></summary>
 <br/>
+- **Closed-loop demo** with real physiological feedback — delivered insulin changes the glucose trajectory<br/>
 - Retrospective replay against real CGM traces (CSV or Dexcom G6/G7 export)<br/>
 - 3 built-in clinical reference patterns: post-prandial spike, nocturnal hypo, dawn phenomenon<br/>
 - Hypothetical IOB accumulation tracking (counterfactual controller audit)<br/>
