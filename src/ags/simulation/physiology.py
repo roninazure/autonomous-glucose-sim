@@ -13,7 +13,20 @@ def advance_physiology(
     snapshot: SimulationSnapshot,
     inputs: SimulationInputs,
     step_minutes: int = 5,
+    delivered_dose_u: float = 0.0,
 ) -> SimulationSnapshot:
+    """Advance physiology by one step.
+
+    Args:
+        snapshot: Current physiological state.
+        inputs: Patient/scenario parameters.
+        step_minutes: CGM cadence in minutes.
+        delivered_dose_u: Insulin delivered by the pump THIS step.
+            In open-loop simulation this is always 0 (pre-computed trajectory).
+            In closed-loop operation the controller's delivery is passed here
+            so that insulin actually enters the PK/PD model and changes the
+            glucose trajectory — the core of the artificial pancreas loop.
+    """
     next_time = snapshot.timestamp_min + step_minutes
 
     # Carbs appearing in blood this step via gamma(2, τ) gut absorption.
@@ -44,7 +57,7 @@ def advance_physiology(
     x1_next, x2_next = advance_insulin_compartments(
         x1=snapshot.insulin_compartment1_u,
         x2=snapshot.insulin_compartment2_u,
-        dose_u=0.0,
+        dose_u=delivered_dose_u,
         step_minutes=step_minutes,
         peak_minutes=inputs.insulin_peak_minutes,
     )

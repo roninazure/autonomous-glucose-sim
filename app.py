@@ -17,7 +17,7 @@ import json
 from ags.evaluation.profile_sweep import build_sweep_export, run_profile_sweep
 from ags.evaluation.profiles import ALL_PROFILES, estimate_isf_from_weight
 from ags.evaluation.report import generate_report
-from ags.evaluation.runner import run_evaluation
+from ags.evaluation.runner import run_closed_loop_evaluation, run_evaluation
 from ags.pump.state import DualWaveConfig, PumpConfig
 from ags.explainability.annotator import annotate_run
 from ags.explainability.state import GATE_COLOURS, GATE_LABELS
@@ -749,9 +749,12 @@ with st.sidebar:
 
     dashboard_mode = st.radio(
         "View",
-        ["A vs B Comparison", "Patient Population Sweep", "Retrospective CGM Replay"],
+        ["⬡ Closed Loop Demo", "A vs B Comparison", "Patient Population Sweep", "Retrospective CGM Replay"],
         horizontal=False,
         help=(
+            "Closed Loop Demo — the full artificial pancreas loop: insulin delivered by the "
+            "controller actually changes the glucose trajectory. Shows no-treatment vs autonomous "
+            "control side by side.\n\n"
             "A vs B Comparison — run two clinical scenarios side-by-side and compare outcomes.\n\n"
             "Patient Population Sweep — run one scenario across all four patient archetypes "
             "(standard adult, insulin-resistant, highly sensitive, rapid-onset).\n\n"
@@ -761,6 +764,7 @@ with st.sidebar:
     )
     # Map friendly names back to keys used downstream
     _MODE_KEY = {
+        "⬡ Closed Loop Demo": "Closed Loop Demo",
         "A vs B Comparison": "Comparison",
         "Patient Population Sweep": "Profile Sweep",
         "Retrospective CGM Replay": "Retrospective Replay",
@@ -768,7 +772,14 @@ with st.sidebar:
     dashboard_mode = _MODE_KEY[dashboard_mode]
 
     st.header("Clinical Scenario")
-    if dashboard_mode == "Comparison":
+    if dashboard_mode == "Closed Loop Demo":
+        demo_scenario_name = st.selectbox(
+            "Scenario",
+            options=["Baseline Meal", "Large Meal Spike", "Missed Bolus", "Dawn Phenomenon", "Sustained Basal Deficit"],
+            index=0,
+        )
+        st.caption(SCENARIO_DESCRIPTIONS.get(demo_scenario_name, ""))
+    elif dashboard_mode == "Comparison":
         scenario_a_name = st.selectbox("Scenario A", options=SCENARIO_OPTIONS, index=0)
         st.caption(SCENARIO_DESCRIPTIONS.get(scenario_a_name, ""))
         scenario_b_name = st.selectbox("Scenario B", options=SCENARIO_OPTIONS, index=2)
@@ -994,6 +1005,7 @@ with st.sidebar:
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     _btn_labels = {
+        "Closed Loop Demo": "Run Closed Loop Demo",
         "Comparison": "Run Comparison",
         "Profile Sweep": "Run Population Sweep",
         "Retrospective Replay": "Run Retrospective Replay",
@@ -1019,7 +1031,170 @@ if run_button:
         extended_duration_minutes=int(_dw_ext_dur),
     )
 
-    if dashboard_mode == "Retrospective Replay":
+    if dashboard_mode == "Closed Loop Demo":
+        # ── Run both trajectories ──────────────────────────────────────────
+        _demo_inputs = build_scenario(demo_scenario_name)
+        with st.spinner("Running closed-loop simulation…"):
+            _cl_records, _cl_summary = run_closed_loop_evaluation(
+                simulation_inputs=_demo_inputs,
+                safety_thresholds=safety_thresholds,
+                pump_config=pump_config,
+                duration_minutes=duration_minutes,
+                step_minutes=step_minutes,
+                seed=42,
+                autonomous_isf=True,
+            )
+        # No-treatment baseline: open-loop simulation, zero insulin delivered
+        from ags.simulation.engine import run_simulation as _run_sim
+        from ags.simulation.sensor import generate_cgm_reading as _gen_cgm
+        _nt_snaps = _run_sim(_demo_inputs, duration_minutes=duration_minutes, step_minutes=step_minutes, seed=42)
+
+        _cl_df  = pd.DataFrame([r.__dict__ for r in _cl_records])
+        _nt_t   = [s.timestamp_min for s in _nt_snaps]
+        _nt_cgm = [s.cgm_glucose_mgdl for s in _nt_snaps]
+
+        # ── Header ────────────────────────────────────────────────────────
+        st.markdown(f"""
+<div style="font-family:'Inter',sans-serif; font-size:1.35rem; font-weight:700;
+            color:{WHITE}; margin:0.5rem 0 0.1rem 0;">
+  Closed Loop Demo &mdash; {demo_scenario_name}
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.88rem; color:{MUTED};
+            margin-bottom:1.2rem; line-height:1.6;">
+  The artificial pancreas loop is closed: insulin delivered by the controller changes the glucose trajectory.<br/>
+  <b style="color:{RED};">Red</b> = no treatment (glucose drifts unchecked) &nbsp;·&nbsp;
+  <b style="color:{NEON};">Green</b> = autonomous control (zero manual intervention)
+</div>
+""", unsafe_allow_html=True)
+
+        # ── Metrics row ───────────────────────────────────────────────────
+        _nt_peak  = max(_nt_cgm)
+        _cl_peak  = _cl_summary.peak_cgm_glucose_mgdl
+        _cl_tir   = _cl_summary.percent_time_in_range
+        _cl_ins   = _cl_summary.total_insulin_delivered_u
+        _nt_tir   = sum(1 for g in _nt_cgm if 70 <= g <= 180) / max(len(_nt_cgm), 1) * 100
+
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric(
+            "Peak glucose — no treatment",
+            f"{_nt_peak:.0f} mg/dL",
+            help="Maximum CGM reading with no insulin delivered.",
+        )
+        mc2.metric(
+            "Peak glucose — autonomous",
+            f"{_cl_peak:.0f} mg/dL",
+            delta=f"{_cl_peak - _nt_peak:.0f} mg/dL",
+            delta_color="inverse",
+            help="Maximum CGM reading under closed-loop autonomous control.",
+        )
+        mc3.metric(
+            "Time in range — autonomous",
+            f"{_cl_tir:.0f}%",
+            delta=f"{_cl_tir - _nt_tir:+.0f}%",
+            help="% of readings 70–180 mg/dL under autonomous control.",
+        )
+        mc4.metric(
+            "Insulin delivered",
+            f"{_cl_ins:.2f} U",
+            help="Total insulin autonomously delivered — zero manual input.",
+        )
+
+        st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
+
+        # ── Glucose trajectory chart ───────────────────────────────────────
+        _demo_layout = _layout(f"Glucose trajectory — {demo_scenario_name}", height=420)
+        _fig_demo = go.Figure(layout=_demo_layout)
+
+        _fig_demo.add_hrect(y0=70, y1=180,
+                            fillcolor="rgba(22,163,74,0.05)", line_width=0,
+                            annotation_text="Target range 70–180", annotation_position="top left",
+                            annotation_font=dict(color=NEON, size=9))
+        _fig_demo.add_hline(y=70,  line=dict(color=RED,   width=1, dash="dot"),
+                            annotation=dict(text="HYPO 70",    font=dict(color=RED,   size=8), xanchor="left"))
+        _fig_demo.add_hline(y=180, line=dict(color=AMBER, width=1, dash="dot"),
+                            annotation=dict(text="HYPER 180",  font=dict(color=AMBER, size=8), xanchor="left"))
+        _fig_demo.add_hline(y=250, line=dict(color=RED,   width=1.5, dash="dash"),
+                            annotation=dict(text="SEVERE 250", font=dict(color=RED,   size=8), xanchor="left"))
+
+        # No-treatment trace
+        _fig_demo.add_trace(go.Scatter(
+            x=_nt_t, y=_nt_cgm,
+            mode="lines",
+            name="No treatment",
+            line=dict(color=RED, width=2.5, dash="dash"),
+            hovertemplate="%{y:.1f} mg/dL — no treatment<extra></extra>",
+        ))
+
+        # Closed-loop trace
+        _fig_demo.add_trace(go.Scatter(
+            x=_cl_df["timestamp_min"], y=_cl_df["cgm_glucose_mgdl"],
+            mode="lines+markers",
+            name="Autonomous control",
+            line=dict(color=NEON, width=2.5),
+            marker=dict(size=4, color=NEON),
+            hovertemplate="%{y:.1f} mg/dL — autonomous<extra></extra>",
+        ))
+
+        # Dose markers on the closed-loop trace
+        _dose_df = _cl_df[_cl_df["pump_delivered_units"] > 0]
+        if not _dose_df.empty:
+            _fig_demo.add_trace(go.Scatter(
+                x=_dose_df["timestamp_min"],
+                y=_dose_df["cgm_glucose_mgdl"],
+                mode="markers",
+                name="Insulin delivered",
+                marker=dict(
+                    symbol="triangle-down",
+                    size=10,
+                    color=CYAN,
+                    line=dict(color=BG2, width=1),
+                ),
+                customdata=_dose_df["pump_delivered_units"],
+                hovertemplate="%{customdata:.3f} U delivered<extra>Insulin</extra>",
+            ))
+
+        st.plotly_chart(_fig_demo, use_container_width=True)
+
+        # ── Insulin delivery bar chart ─────────────────────────────────────
+        if not _dose_df.empty:
+            _ins_layout = _layout("Autonomous insulin deliveries", height=200)
+            _fig_ins = go.Figure(layout=_ins_layout)
+            _fig_ins.add_trace(go.Bar(
+                x=_dose_df["timestamp_min"],
+                y=_dose_df["pump_delivered_units"],
+                name="Delivered (U)",
+                marker_color=CYAN,
+                hovertemplate="t=%{x} min<br>%{y:.3f} U<extra></extra>",
+            ))
+            _fig_ins.update_layout(
+                yaxis_title="Units delivered",
+                xaxis_title="Time (min)",
+                showlegend=False,
+                bargap=0.3,
+            )
+            st.plotly_chart(_fig_ins, use_container_width=True)
+
+        # ── Cause breakdown table ──────────────────────────────────────────
+        with st.expander("Step-by-step autonomous decisions", expanded=False):
+            _demo_tbl = _cl_df[[
+                "timestamp_min", "cgm_glucose_mgdl", "rate_mgdl_per_min",
+                "glucose_cause", "meal_phase", "pump_delivered_units",
+                "insulin_on_board_u", "recommendation_reason",
+            ]].copy()
+            _demo_tbl.columns = [
+                "Time (min)", "CGM (mg/dL)", "Rate (mg/dL/min)",
+                "Cause", "Meal phase", "Delivered (U)",
+                "IOB (U)", "Controller reason",
+            ]
+            _demo_tbl["CGM (mg/dL)"] = _demo_tbl["CGM (mg/dL)"].map("{:.1f}".format)
+            _demo_tbl["Rate (mg/dL/min)"] = _demo_tbl["Rate (mg/dL/min)"].map("{:+.2f}".format)
+            _demo_tbl["Delivered (U)"] = _demo_tbl["Delivered (U)"].map("{:.3f}".format)
+            _demo_tbl["IOB (U)"] = _demo_tbl["IOB (U)"].map("{:.3f}".format)
+            st.dataframe(_demo_tbl, hide_index=True, use_container_width=True)
+
+        st.stop()
+
+    elif dashboard_mode == "Retrospective Replay":
         # ── Load readings ──────────────────────────────────────────────────
         try:
             if retro_source == "Built-in reference trace" and retro_trace_name:
