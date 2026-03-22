@@ -747,29 +747,54 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    dashboard_mode = st.radio(
-        "View",
-        ["⬡ Closed Loop Demo", "A vs B Comparison", "Patient Population Sweep", "Retrospective CGM Replay"],
-        horizontal=False,
-        help=(
-            "Closed Loop Demo — the full artificial pancreas loop: insulin delivered by the "
-            "controller actually changes the glucose trajectory. Shows no-treatment vs autonomous "
-            "control side by side.\n\n"
-            "A vs B Comparison — run two clinical scenarios side-by-side and compare outcomes.\n\n"
-            "Patient Population Sweep — run one scenario across all four patient archetypes "
-            "(standard adult, insulin-resistant, highly sensitive, rapid-onset).\n\n"
-            "Retrospective CGM Replay — load a real or reference CGM trace and see what the "
-            "controller would have recommended, without affecting the actual glucose."
-        ),
+    # ── Clinical modes ────────────────────────────────────────────────────
+    st.markdown(
+        f"<div style='font-size:0.68rem;font-weight:700;color:{MUTED};letter-spacing:0.6px;"
+        f"text-transform:uppercase;padding:0.4rem 0 0.3rem 0;'>Clinical</div>",
+        unsafe_allow_html=True,
     )
-    # Map friendly names back to keys used downstream
+    _nav_clinical = st.radio(
+        "",
+        ["⬡ Closed Loop Demo", "Retrospective CGM Replay"],
+        key="nav_clinical",
+        label_visibility="collapsed",
+    )
+
+    st.markdown(
+        f"<hr style='border:none;border-top:1px solid {GRID};margin:0.6rem 0 0.4rem 0'/>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Research & Validation (collapsed by default) ───────────────────
+    st.markdown(
+        f"<div style='font-size:0.68rem;font-weight:700;color:{MUTED};letter-spacing:0.6px;"
+        f"text-transform:uppercase;padding:0.1rem 0 0.3rem 0;'>Research & Validation</div>",
+        unsafe_allow_html=True,
+    )
+    _nav_research_open = st.checkbox("Open research tools", value=False, key="nav_research_open")
+    if _nav_research_open:
+        _nav_research = st.radio(
+            "",
+            ["A vs B Comparison", "Population Sweep"],
+            key="nav_research",
+            label_visibility="collapsed",
+        )
+        _dashboard_mode_raw = _nav_research
+    else:
+        _dashboard_mode_raw = _nav_clinical
+
+    st.markdown(
+        f"<hr style='border:none;border-top:1px solid {GRID};margin:0.6rem 0 0.2rem 0'/>",
+        unsafe_allow_html=True,
+    )
+
     _MODE_KEY = {
-        "⬡ Closed Loop Demo": "Closed Loop Demo",
-        "A vs B Comparison": "Comparison",
-        "Patient Population Sweep": "Profile Sweep",
+        "⬡ Closed Loop Demo":    "Closed Loop Demo",
         "Retrospective CGM Replay": "Retrospective Replay",
+        "A vs B Comparison":     "Comparison",
+        "Population Sweep":      "Profile Sweep",
     }
-    dashboard_mode = _MODE_KEY[dashboard_mode]
+    dashboard_mode = _MODE_KEY[_dashboard_mode_raw]
 
     st.header("Clinical Scenario")
     if dashboard_mode == "Closed Loop Demo":
@@ -836,172 +861,166 @@ with st.sidebar:
         scenario_a_name = retro_trace_name or "Custom trace"
         scenario_b_name = scenario_a_name
 
-    st.header("Simulation Settings")
-    duration_minutes = st.slider("Run duration (minutes)", 30, 360, 180, 30)
-    step_minutes = st.selectbox(
-        "CGM reading interval",
-        [1, 5, 10, 15],
-        index=1,
-        format_func=lambda v: f"{v} min  ({'FreeStyle Libre' if v == 1 else 'Dexcom G6/G7' if v == 5 else 'standard'})",
-        help="How often the CGM provides a reading and the controller makes a decision. "
-             "1 min matches FreeStyle Libre; 5 min matches Dexcom G6/G7. "
-             "Detection thresholds adjust automatically.",
-    )
+    if dashboard_mode == "Closed Loop Demo":
+        # ── Demo: zero configuration — all defaults, no visible controls ──
+        st.markdown(f"""
+<div style="background:rgba(22,163,74,0.08); border:1.5px solid {NEON};
+            border-radius:8px; padding:0.85rem 1rem; margin:0.75rem 0;">
+  <div style="font-size:0.72rem; font-weight:700; color:{NEON};
+              text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.4rem;">
+    Autonomous · No setup required
+  </div>
+  <div style="font-size:0.82rem; color:{WHITE}; line-height:1.6;">
+    The algorithm reads the glucose signal only.<br/>
+    No patient type. No profile. No manual input.
+  </div>
+</div>""", unsafe_allow_html=True)
+        # Fixed demo defaults — not user-configurable
+        _autonomous_isf             = True
+        correction_factor_mgdl_per_unit = 50.0
+        duration_minutes            = 240
+        step_minutes                = 5
+        max_units_per_interval      = 1.0
+        max_insulin_on_board_u      = 3.0
+        min_predicted_glucose_mgdl  = 80
+        require_confirmed_trend     = True
+        min_excursion_delta         = 0.0
+        microbolus_fraction         = 0.25
+        _dw_enabled                 = False
+        _dw_imm_frac                = 0.33
+        _dw_ext_dur                 = 20
+        dose_increment_u            = 0.05
+        pump_max_units_per_interval = 1.0
 
-    st.header("Patient Profile")
-
-    _autonomous_isf = st.checkbox(
-        "Autonomous mode — infer sensitivity from glucose dynamics",
-        value=True,
-        help="Full self-driving pancreas mode. Three capabilities activate together:\n\n"
-             "1 · Autonomous ISF: watches how fast glucose spikes and infers insulin sensitivity "
-             "from that signal — no ISF input required. Fast spike → resistant → doses more. "
-             "Slow rise → sensitive → doses conservatively.\n\n"
-             "2 · Online ISF learning: records every dose and the glucose drop it caused 60 min later. "
-             "The more the system runs, the more precisely it knows this patient's real sensitivity — "
-             "blending the live observation history with the rate-of-rise estimate.\n\n"
-             "3 · Cause-aware dosing: distinguishes meal spikes from basal drift from post-hypo rebound. "
-             "Each cause gets a different strategy — pre-bolus on meal ONSET (fires once per meal), "
-             "25%% micro-bolus for drift, 10%% touch for rebound.",
-    )
-
-    if _autonomous_isf:
-        st.caption(
-            "Sensitivity inferred from glucose dynamics · online learning from dose→response history · "
-            "cause-aware dosing (meal / basal drift / rebound). No manual ISF input required."
-        )
-        correction_factor_mgdl_per_unit = 50.0  # fallback value, ignored in autonomous mode
     else:
-        _use_weight_isf = st.checkbox(
-            "Estimate insulin sensitivity from weight",
-            value=False,
-            help="Uses the 1700 Rule: ISF = 1700 ÷ total daily dose, "
-                 "where total daily dose ≈ body weight (kg) × 0.55. "
-                 "You can override the result manually.",
+        # ── All other modes: full controls ────────────────────────────────
+        st.header("Simulation Settings")
+        duration_minutes = st.slider("Run duration (minutes)", 30, 360, 180, 30)
+        step_minutes = st.selectbox(
+            "CGM reading interval",
+            [1, 5, 10, 15],
+            index=1,
+            format_func=lambda v: f"{v} min  ({'FreeStyle Libre' if v == 1 else 'Dexcom G6/G7' if v == 5 else 'standard'})",
+            help="How often the CGM provides a reading and the controller makes a decision. "
+                 "1 min matches FreeStyle Libre; 5 min matches Dexcom G6/G7. "
+                 "Detection thresholds adjust automatically.",
         )
-        _weight_kg = st.slider(
-            "Body weight (kg)",
-            30.0, 150.0, 70.0, 1.0,
+
+        st.header("Patient Profile")
+        _autonomous_isf = st.checkbox(
+            "Autonomous mode — infer sensitivity from glucose dynamics",
+            value=True,
+            help="Full self-driving pancreas mode. Three capabilities activate together:\n\n"
+                 "1 · Autonomous ISF: watches how fast glucose spikes and infers insulin sensitivity "
+                 "from that signal — no ISF input required. Fast spike → resistant → doses more. "
+                 "Slow rise → sensitive → doses conservatively.\n\n"
+                 "2 · Online ISF learning: records every dose and the glucose drop it caused 60 min later. "
+                 "The more the system runs, the more precisely it knows this patient's real sensitivity — "
+                 "blending the live observation history with the rate-of-rise estimate.\n\n"
+                 "3 · Cause-aware dosing: distinguishes meal spikes from basal drift from post-hypo rebound. "
+                 "Each cause gets a different strategy — pre-bolus on meal ONSET (fires once per meal), "
+                 "25%% micro-bolus for drift, 10%% touch for rebound.",
         )
-        if _use_weight_isf:
-            _auto_isf = estimate_isf_from_weight(_weight_kg)
+        if _autonomous_isf:
             st.caption(
-                f"Estimated sensitivity: **{_auto_isf:.1f} mg/dL per unit**  "
-                f"(daily dose ≈ {_weight_kg * 0.55:.1f} U)"
+                "Sensitivity inferred from glucose dynamics · online learning from dose→response history · "
+                "cause-aware dosing (meal / basal drift / rebound). No manual ISF input required."
             )
-            correction_factor_mgdl_per_unit = _auto_isf
+            correction_factor_mgdl_per_unit = 50.0
         else:
-            correction_factor_mgdl_per_unit = st.slider(
-                "Insulin sensitivity — mg/dL drop per unit",
-                20.0, 120.0, 50.0, 1.0,
-                help="How much blood glucose drops per unit of insulin for this patient. "
-                     "30 = insulin resistant, 50 = typical adult, 85 = highly sensitive.",
+            _use_weight_isf = st.checkbox(
+                "Estimate insulin sensitivity from weight",
+                value=False,
+                help="Uses the 1700 Rule: ISF = 1700 ÷ total daily dose, "
+                     "where total daily dose ≈ body weight (kg) × 0.55. "
+                     "You can override the result manually.",
+            )
+            _weight_kg = st.slider("Body weight (kg)", 30.0, 150.0, 70.0, 1.0)
+            if _use_weight_isf:
+                _auto_isf = estimate_isf_from_weight(_weight_kg)
+                st.caption(
+                    f"Estimated sensitivity: **{_auto_isf:.1f} mg/dL per unit**  "
+                    f"(daily dose ≈ {_weight_kg * 0.55:.1f} U)"
+                )
+                correction_factor_mgdl_per_unit = _auto_isf
+            else:
+                correction_factor_mgdl_per_unit = st.slider(
+                    "Insulin sensitivity — mg/dL drop per unit",
+                    20.0, 120.0, 50.0, 1.0,
+                    help="How much blood glucose drops per unit of insulin for this patient. "
+                         "30 = insulin resistant, 50 = typical adult, 85 = highly sensitive.",
+                )
+
+        st.header("Safety Limits")
+        max_units_per_interval = st.slider(
+            "Maximum dose per reading (units)", 0.05, 3.0, 1.0, 0.05,
+            help="Hard cap on insulin delivered in a single interval.",
+        )
+        max_insulin_on_board_u = st.slider(
+            "Maximum active insulin allowed (units)", 0.5, 10.0, 3.0, 0.1,
+            help="If total insulin still active in the body reaches this level, "
+                 "the controller will not add more — prevents stacking doses.",
+        )
+        min_predicted_glucose_mgdl = st.slider(
+            "Low glucose safety threshold (mg/dL)", 60, 120, 80, 1,
+            help="If glucose is predicted to fall below this value within 30 minutes, "
+                 "all dosing is suspended until it recovers.",
+        )
+        require_confirmed_trend = st.checkbox(
+            "Wait for two consecutive rising readings before dosing",
+            value=True,
+            help="Avoids giving insulin on a single noisy reading. Recommended: keep this on.",
+        )
+
+        st.header("Dosing Strategy")
+        min_excursion_delta = st.slider(
+            "Ignore glucose changes smaller than (mg/dL)", 0.0, 15.0, 0.0, 0.5,
+            help="Set to a small value (e.g. 2–5) to avoid reacting to sensor noise.",
+        )
+        _ror_tiered = st.checkbox(
+            "Adjust dose size based on how fast glucose is rising",
+            value=False,
+            help="Faster rise triggers a larger dose automatically.",
+        )
+        if _ror_tiered:
+            microbolus_fraction = 1.0
+            st.caption("Dose fraction set automatically — faster rise triggers a larger dose.")
+        else:
+            microbolus_fraction = st.slider(
+                "What fraction of the calculated correction to deliver each interval",
+                0.0, 1.0, 0.25, 0.05,
+                help="0.25 = cautious micro-bolus. 1.0 = full correction in one go.",
             )
 
-    st.header("Safety Limits")
-    max_units_per_interval = st.slider(
-        "Maximum dose per reading (units)",
-        0.05, 3.0, 1.0, 0.05,
-        help="Hard cap on insulin delivered in a single interval. "
-             "Acts as a last-resort safety ceiling regardless of other settings.",
-    )
-    max_insulin_on_board_u = st.slider(
-        "Maximum active insulin allowed (units)",
-        0.5, 10.0, 3.0, 0.1,
-        help="If total insulin still active in the body reaches this level, "
-             "the controller will not add more — prevents stacking doses.",
-    )
-    min_predicted_glucose_mgdl = st.slider(
-        "Low glucose safety threshold (mg/dL)",
-        60, 120, 80, 1,
-        help="If glucose is predicted to fall below this value within 30 minutes, "
-             "all dosing is suspended until it recovers.",
-    )
-    require_confirmed_trend = st.checkbox(
-        "Wait for two consecutive rising readings before dosing",
-        value=True,
-        help="If enabled, the algorithm waits until glucose has risen on at least two readings in a row "
-             "before recommending a correction. "
-             "This avoids giving insulin on a single noisy reading that might not represent a true rise. "
-             "Recommended: keep this on.",
-    )
-
-    st.header("Dosing Strategy")
-    min_excursion_delta = st.slider(
-        "Ignore glucose changes smaller than (mg/dL)",
-        0.0, 15.0, 0.0, 0.5,
-        help="If glucose moves by less than this amount between readings, no dose is considered. "
-             "Set to a small value (e.g. 2–5) to avoid reacting to sensor noise when glucose is stable near target.",
-    )
-
-    _ror_tiered = st.checkbox(
-        "Adjust dose size based on how fast glucose is rising",
-        value=False,
-        help="When enabled, the algorithm automatically scales how much it gives based on the speed of the rise:\n"
-             "  Flat or falling             → no dose\n"
-             "  Rising slowly (< 1 mg/dL/min)  → no dose\n"
-             "  Rising moderately (1–2 mg/dL/min) → 25% of the calculated correction\n"
-             "  Rising quickly (2–3 mg/dL/min)   → 50%\n"
-             "  Spiking (≥ 3 mg/dL/min)          → full correction\n\n"
-             "When enabled, this overrides the manual fraction slider below.",
-    )
-    if _ror_tiered:
-        microbolus_fraction = 1.0
-        st.caption("Dose fraction is set automatically — faster rise triggers a larger dose.")
-    else:
-        microbolus_fraction = st.slider(
-            "What fraction of the calculated correction to deliver each interval",
-            0.0, 1.0, 0.25, 0.05,
-            help="0.25 = deliver one quarter of the calculated correction (cautious, reduces stacking risk). "
-                 "1.0 = deliver the full correction in one go. "
-                 "Most closed-loop systems use 0.2–0.5 for safety.",
+        st.header("Split Bolus Delivery")
+        _dw_enabled = st.checkbox(
+            "Use dual-wave (combo) bolus delivery",
+            value=False,
+            help="A portion is delivered immediately; the remainder is spread slowly over a set window.",
         )
+        if _dw_enabled:
+            _dw_imm_frac = st.slider(
+                "Immediate portion (fraction of total dose)", 0.1, 0.9, 0.33, 0.01,
+            )
+            _dw_ext_dur = st.selectbox(
+                "Extended delivery window",
+                [10, 15, 20, 30, 45], index=2,
+                format_func=lambda v: f"{v} minutes",
+            )
+        else:
+            _dw_imm_frac = 0.33
+            _dw_ext_dur  = 20
 
-    st.header("Split Bolus Delivery")
-    _dw_enabled = st.checkbox(
-        "Use dual-wave (combo) bolus delivery",
-        value=False,
-        help="Mimics the combo/dual-wave bolus mode available on insulin pumps. "
-             "A portion is delivered immediately to cover the initial glucose rise; "
-             "the remainder is spread slowly over a set window to match prolonged carb absorption.\n\n"
-             "Example: 6 units total → 2 units now + 4 units over 20 min.",
-    )
-    if _dw_enabled:
-        _dw_imm_frac = st.slider(
-            "Immediate portion (fraction of total dose)",
-            0.1, 0.9, 0.33, 0.01,
-            help="What fraction of the dose to give right now. "
-                 "The rest is delivered slowly over the extended window. "
-                 "Example: 2 of 6 units = 0.33.",
+        st.header("Pump Settings")
+        dose_increment_u = st.selectbox(
+            "Smallest dose the pump can deliver",
+            [0.05, 0.1], index=0,
+            format_func=lambda v: f"{v} units",
+            help="0.05 U matches most modern insulin pumps.",
         )
-        _dw_ext_dur = st.selectbox(
-            "Extended delivery window",
-            [10, 15, 20, 30, 45],
-            index=2,
-            format_func=lambda v: f"{v} minutes",
-            help="How long to spread the remaining dose. "
-                 "Matches slower carb absorption curves.",
+        pump_max_units_per_interval = st.slider(
+            "Pump hardware dose ceiling (units)", 0.05, 3.0, 1.0, 0.05,
         )
-    else:
-        _dw_imm_frac = 0.33
-        _dw_ext_dur = 20
-
-    st.header("Pump Settings")
-    dose_increment_u = st.selectbox(
-        "Smallest dose the pump can deliver",
-        [0.05, 0.1],
-        index=0,
-        format_func=lambda v: f"{v} units",
-        help="The minimum resolution of the pump. Calculated doses are rounded to the nearest increment. "
-             "0.05 U matches most modern insulin pumps.",
-    )
-    pump_max_units_per_interval = st.slider(
-        "Pump hardware dose ceiling (units)",
-        0.05, 3.0, 1.0, 0.05,
-        help="The physical maximum the pump hardware will deliver in a single interval — "
-             "a hard mechanical limit independent of the safety settings above. "
-             "In practice this is usually set to match the safety maximum.",
-    )
 
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     _btn_labels = {
