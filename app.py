@@ -31,6 +31,7 @@ from ags.simulation.scenarios import (
     exercise_hypoglycemia_scenario,
     late_correction_scenario,
     missed_bolus_scenario,
+    sustained_basal_deficit_scenario,
 )
 from ags.simulation.state import MealEvent, SimulationInputs
 
@@ -442,13 +443,14 @@ def safety_chart(df_a: pd.DataFrame, df_b: pd.DataFrame, name_a: str, name_b: st
 
 # ── Scenario metadata ────────────────────────────────────────────────────────
 SCENARIO_DESCRIPTIONS = {
-    "Baseline Meal":        "45 g carbohydrate meal · typical insulin sensitivity · validates time-in-range under standard conditions",
-    "Fasting Baseline":     "No meal · stable overnight drift · confirms the algorithm withholds insulin appropriately when no correction is needed",
-    "Large Meal Spike":     "90 g carbohydrate meal · steep post-prandial rise · evaluates dosing behaviour during a large glycaemic excursion",
-    "Dawn Phenomenon":      "No meal · cortisol-driven pre-dawn rise · assesses whether the algorithm detects and corrects a slow, sustained elevation",
-    "Exercise Hypoglycemia":"Falling glucose during exercise · high insulin sensitivity · verifies that safety checks prevent compounding hypoglycaemia",
-    "Missed Bolus":         "75 g meal with no pre-meal bolus · tests how the algorithm recovers from a delayed correction",
-    "Late Correction":      "60 g meal plus snack · insulin given late · explores the risk of glucose-insulin timing mismatch",
+    "Baseline Meal":           "45 g carbohydrate meal · typical insulin sensitivity · validates time-in-range under standard conditions",
+    "Fasting Baseline":        "No meal · stable overnight drift · confirms the algorithm withholds insulin appropriately when no correction is needed",
+    "Large Meal Spike":        "90 g carbohydrate meal · steep post-prandial rise · evaluates dosing behaviour during a large glycaemic excursion",
+    "Dawn Phenomenon":         "No meal · cortisol-driven pre-dawn rise · assesses whether the algorithm detects and corrects a slow, sustained elevation",
+    "Sustained Basal Deficit": "No meal · constant 0.30 mg/dL/min drift · canonical test for BASAL_DRIFT detection and sustained micro-bolus correction",
+    "Exercise Hypoglycemia":   "Falling glucose during exercise · high insulin sensitivity · verifies that safety checks prevent compounding hypoglycaemia",
+    "Missed Bolus":            "75 g meal with no pre-meal bolus · tests how the algorithm recovers from a delayed correction",
+    "Late Correction":         "60 g meal plus snack · insulin given late · explores the risk of glucose-insulin timing mismatch",
 }
 
 
@@ -574,6 +576,8 @@ def build_scenario(name: str) -> SimulationInputs:
         )
     if name == "Dawn Phenomenon":
         return dawn_phenomenon_scenario()
+    if name == "Sustained Basal Deficit":
+        return sustained_basal_deficit_scenario()
     if name == "Exercise Hypoglycemia":
         return exercise_hypoglycemia_scenario()
     if name == "Missed Bolus":
@@ -728,6 +732,7 @@ SCENARIO_OPTIONS = [
     "Fasting Baseline",
     "Large Meal Spike",
     "Dawn Phenomenon",
+    "Sustained Basal Deficit",
     "Exercise Hypoglycemia",
     "Missed Bolus",
     "Late Correction",
@@ -837,17 +842,22 @@ with st.sidebar:
     _autonomous_isf = st.checkbox(
         "Autonomous mode — infer sensitivity from glucose dynamics",
         value=True,
-        help="The system watches how fast glucose is spiking and automatically infers "
-             "insulin sensitivity from that signal — no ISF input required.\n\n"
-             "Fast spike (≥3 mg/dL/min) → patient is insulin resistant → system doses more aggressively.\n"
-             "Slow/flat rise → patient is sensitive → system doses conservatively.\n\n"
-             "This is the artificial-pancreas / Tesla model: no pre-programmed sensitivity number needed.",
+        help="Full self-driving pancreas mode. Three capabilities activate together:\n\n"
+             "1 · Autonomous ISF: watches how fast glucose spikes and infers insulin sensitivity "
+             "from that signal — no ISF input required. Fast spike → resistant → doses more. "
+             "Slow rise → sensitive → doses conservatively.\n\n"
+             "2 · Online ISF learning: records every dose and the glucose drop it caused 60 min later. "
+             "The more the system runs, the more precisely it knows this patient's real sensitivity — "
+             "blending the live observation history with the rate-of-rise estimate.\n\n"
+             "3 · Cause-aware dosing: distinguishes meal spikes from basal drift from post-hypo rebound. "
+             "Each cause gets a different strategy — pre-bolus on meal ONSET (fires once per meal), "
+             "25%% micro-bolus for drift, 10%% touch for rebound.",
     )
 
     if _autonomous_isf:
         st.caption(
-            "Sensitivity is inferred automatically from the rate of glucose rise. "
-            "No manual ISF input required."
+            "Sensitivity inferred from glucose dynamics · online learning from dose→response history · "
+            "cause-aware dosing (meal / basal drift / rebound). No manual ISF input required."
         )
         correction_factor_mgdl_per_unit = 50.0  # fallback value, ignored in autonomous mode
     else:

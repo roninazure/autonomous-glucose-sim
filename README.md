@@ -17,7 +17,7 @@
 ![Boundary](https://img.shields.io/badge/⬡_Boundary-Simulation_Only-ff4d6d?style=flat-square&labelColor=050a06)
 ![Python](https://img.shields.io/badge/Python-3.10+-39ff14?style=flat-square&logo=python&logoColor=39ff14&labelColor=050a06)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-ff4d6d?style=flat-square&logo=streamlit&logoColor=white&labelColor=050a06)
-![Tests](https://img.shields.io/badge/Tests-210_passing-39ff14?style=flat-square&logo=pytest&logoColor=39ff14&labelColor=050a06)
+![Tests](https://img.shields.io/badge/Tests-219_passing-39ff14?style=flat-square&logo=pytest&logoColor=39ff14&labelColor=050a06)
 
 </div>
 
@@ -111,6 +111,28 @@ ISF ≈ 1700 ÷ TDD       where  TDD ≈ weight_kg × 0.55
 ```
 
 For a 70 kg patient: TDD ≈ 38.5 U/day → ISF ≈ 44 mg/dL/U. The insulin-to-carb ratio (ICR) is also estimated via the 500 Rule. Enable in sidebar: **Patient → Estimate ISF from weight**.
+
+### 5 · Pre-Bolus De-Duplication (Cause-Aware Dosing)
+When a meal is detected at ONSET, the controller fires a **single pre-bolus** that covers the leading edge of carb absorption (~40% of estimated carb impact). Subsequent ONSET steps — which would previously re-fire the pre-bolus on every CGM reading — are suppressed by a persistent state flag that resets only after 20 consecutive minutes of no meal signal. Result: one surgical pre-dose per meal, not a repeated stack.
+
+| Cause | Strategy |
+|:--|:--|
+| Meal ONSET | Pre-bolus (once per meal) + adaptive micro-bolus loop |
+| Meal PEAK | RoR-tiered micro-bolus (25–100% of correction) |
+| Basal drift | 25%-fraction micro-bolus — accumulates against slow creep |
+| Post-hypo rebound | 10%-fraction touch — allows natural stabilisation first |
+
+### 6 · Online ISF Learning (Dose → Response Feedback)
+After every significant insulin delivery, the system **records the glucose level at time of delivery** and waits 60 minutes. It then measures the actual glucose drop and adds an `(units, drop)` observation to a rolling 12-entry window. The recommender blends this empirical evidence with the rate-of-rise estimate:
+
+```
+effective_ISF = 0.6 × RoR_estimated + 0.4 × observed_from_history
+```
+
+The longer the system runs with a patient, the more precisely it knows their real ISF — converging from a generic lookup table toward patient-specific evidence. Zero configuration required.
+
+### 7 · Basal Drift Detection (Fixed)
+The basal drift detector uses a 60-minute sliding window and requires ≥6 CGM readings for a reliable R² linearity test. The CGM history window in the runner was previously set to 5 — **one reading short**, meaning drift detection never fired in production. Fixed to 12 readings (matching the detector's full look-back). A new **Sustained Basal Deficit** simulation scenario (0.30 mg/dL/min constant drift, no meal) provides the canonical end-to-end validation path for the `BASAL_DRIFT` detection and correction loop.
 
 ---
 
@@ -231,7 +253,7 @@ src/
     ├── retrospective/    <- CGM trace loader · reference traces · replay runner
     └── explainability/   <- DecisionExplanation · gate annotator · narrative generator
 
-tests/                    <- 210 tests, all passing
+tests/                    <- 219 tests, all passing
 docs/
 experiments/
 app.py                    <- Streamlit dashboard (Comparison · Profile Sweep · Retrospective Replay)
