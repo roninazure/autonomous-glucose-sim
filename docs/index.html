@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pancri.ai — Autonomous Glucose Control</title>
+  <meta name="description" content="Research-grade simulation platform for autonomous closed-loop insulin delivery. Built for clinicians and researchers." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0a0a;
+      --bg2:      #111111;
+      --bg3:      #181818;
+      --border:   #222222;
+      --green:    #00ff88;
+      --green-dim:#00cc6a;
+      --green-bg: rgba(0,255,136,0.06);
+      --text:     #f0f0f0;
+      --muted:    #888888;
+      --red:      #ff4444;
+      --amber:    #ffaa00;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-logo {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--green);
+      text-decoration: none;
+    }
+
+    .nav-logo span { color: var(--text); }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    /* ── HERO ── */
+    .hero {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 7rem 2rem 5rem;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--green-bg);
+      border: 1px solid rgba(0,255,136,0.25);
+      color: var(--green);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.35rem 1rem;
+      border-radius: 100px;
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 1.4rem;
+    }
+
+    h1 em {
+      font-style: normal;
+      color: var(--green);
+    }
+
+    .hero-sub {
+      font-size: clamp(1rem, 2.5vw, 1.2rem);
+      color: var(--muted);
+      max-width: 620px;
+      margin: 0 auto 2.8rem;
+    }
+
+    .cta-group {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: #000;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 0.85rem 2.2rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary:hover {
+      background: var(--green-dim);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      font-weight: 600;
+      font-size: 1rem;
+      padding: 0.85rem 2.2rem;
+      border-radius: 8px;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s, transform 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-secondary:hover {
+      border-color: #444;
+      transform: translateY(-1px);
+    }
+
+    /* ── STATS STRIP ── */
+    .stats-strip {
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      padding: 2.5rem 2rem;
+    }
+
+    .stats-inner {
+      max-width: 860px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 2rem;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: -0.03em;
+    }
+
+    .stat-label {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+
+    /* ── SECTIONS ── */
+    section {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 5rem 2rem;
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 0.8rem;
+    }
+
+    h2 {
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .section-intro {
+      color: var(--muted);
+      max-width: 580px;
+      margin-bottom: 3rem;
+    }
+
+    /* ── FEATURE CARDS ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.2rem;
+    }
+
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.6rem;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .card:hover {
+      border-color: rgba(0,255,136,0.3);
+      transform: translateY(-2px);
+    }
+
+    .card-icon {
+      font-size: 1.6rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .card p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ── SAFETY BLOCK ── */
+    .safety-block {
+      background: var(--bg2);
+      border: 1px solid #2a1a1a;
+      border-left: 4px solid var(--red);
+      border-radius: 12px;
+      padding: 2rem 2rem 2rem 2.2rem;
+      margin-top: 4rem;
+    }
+
+    .safety-block h3 {
+      color: var(--red);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.8rem;
+    }
+
+    .safety-block p {
+      font-size: 0.9rem;
+      color: #ccc;
+      line-height: 1.7;
+    }
+
+    .safety-block strong { color: var(--text); }
+
+    /* ── HOW IT WORKS ── */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .step {
+      display: flex;
+      gap: 1.6rem;
+      padding: 1.8rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .step:last-child { border-bottom: none; }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--green-bg);
+      border: 1px solid rgba(0,255,136,0.3);
+      color: var(--green);
+      font-weight: 800;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 0.1rem;
+    }
+
+    .step-body h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+
+    .step-body p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ── SCENARIOS ── */
+    .scenario-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    .scenario-pill {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+      font-size: 0.85rem;
+    }
+
+    .scenario-pill strong {
+      display: block;
+      margin-bottom: 0.2rem;
+      color: var(--text);
+    }
+
+    .scenario-pill span { color: var(--muted); font-size: 0.8rem; }
+
+    /* ── CTA BOTTOM ── */
+    .cta-section {
+      text-align: center;
+      padding: 6rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--bg2);
+    }
+
+    .cta-section h2 {
+      margin-bottom: 1rem;
+    }
+
+    .cta-section p {
+      color: var(--muted);
+      margin-bottom: 2.4rem;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    footer a:hover { color: var(--text); }
+
+    .footer-inner {
+      max-width: 860px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    /* ── DIVIDER ── */
+    .divider { border: none; border-top: 1px solid var(--border); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .nav-links { display: none; }
+      .hero { padding: 4rem 1.2rem 3rem; }
+      section { padding: 3.5rem 1.2rem; }
+      .cta-section { padding: 4rem 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="#">pancri<span>.ai</span></a>
+  <ul class="nav-links">
+    <li><a href="#how-it-works">How it works</a></li>
+    <li><a href="#scenarios">Scenarios</a></li>
+    <li><a href="#safety">Safety</a></li>
+    <li><a href="https://github.com/roninazure/autonomous-glucose-sim" target="_blank" rel="noopener">GitHub</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="badge">Research Platform · Closed-Loop Insulin Delivery</div>
+  <h1>An autonomous<br><em>artificial pancreas</em><br>you can run in your browser</h1>
+  <p class="hero-sub">
+    Physics-based glucose–insulin simulation with a closed-loop controller,
+    multi-scenario stress testing, and clinician-readable safety reports.
+    No install. No data upload. Runs entirely in the cloud.
+  </p>
+  <div class="cta-group">
+    <a class="btn-primary" href="https://pancri.streamlit.app" target="_blank" rel="noopener">
+      ▶&nbsp; Run the simulation
+    </a>
+    <a class="btn-secondary" href="https://github.com/roninazure/autonomous-glucose-sim" target="_blank" rel="noopener">
+      View source
+    </a>
+  </div>
+</header>
+
+<!-- STATS STRIP -->
+<div class="stats-strip">
+  <div class="stats-inner">
+    <div>
+      <div class="stat-value">6</div>
+      <div class="stat-label">Clinical scenarios</div>
+    </div>
+    <div>
+      <div class="stat-value">240 min</div>
+      <div class="stat-label">Real-time simulation window</div>
+    </div>
+    <div>
+      <div class="stat-value">70–180</div>
+      <div class="stat-label">mg/dL target range</div>
+    </div>
+    <div>
+      <div class="stat-value">3-layer</div>
+      <div class="stat-label">Safety architecture</div>
+    </div>
+  </div>
+</div>
+
+<!-- WHAT IT IS -->
+<section id="what-it-is">
+  <div class="section-label">What it is</div>
+  <h2>Simulation-first closed-loop research</h2>
+  <p class="section-intro">
+    pancri.ai is a proof-of-concept platform for studying autonomous glucose control algorithms
+    before any patient contact. Run it, break it, learn from it.
+  </p>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">🧬</div>
+      <h3>Physiological model</h3>
+      <p>Bergman minimal model for glucose–insulin kinetics. Meal absorption, insulin-on-board tracking, and dawn-phenomenon drift.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚙️</div>
+      <h3>Closed-loop controller</h3>
+      <p>Basal rate modulation, dual-wave bolus delivery, and correction logic — the full autonomous loop running every simulation tick.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📊</div>
+      <h3>Clinical reporting</h3>
+      <p>Time-in-range, peak glucose, hypo events, insulin delivery summary — formatted the way an endocrinologist expects to read it.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔬</div>
+      <h3>Profile sweeps</h3>
+      <p>Run the same scenario across a cohort of simulated patient profiles. Spot systemic risks that single-run testing misses.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📋</div>
+      <h3>Retrospective analysis</h3>
+      <p>Paste in CGM data and the platform will replay what the controller would have done — side-by-side with the real trace.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🛡️</div>
+      <h3>Explainability layer</h3>
+      <p>Every decision gate annotated. See exactly why the controller increased basal, withheld a bolus, or triggered a safety clamp.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works">
+  <div class="section-label">How it works</div>
+  <h2>From scenario to report in seconds</h2>
+  <p class="section-intro">No setup, no patient data required.</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>Choose a scenario</h3>
+        <p>Select from six pre-built clinical challenges — or configure your own patient parameters: weight, ISF, carb ratio, basal rate.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>Run the simulation</h3>
+        <p>The closed-loop controller runs a 240-minute window. Watch the glucose trace build in real time alongside insulin delivery events.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>Read the report</h3>
+        <p>Time-in-range, hypo/hyper events, bolus accuracy, and safety gate activations — all surfaced in a clinician-readable summary.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h3>Sweep a cohort</h3>
+        <p>Run the same scenario across 10 simulated patient profiles. Export the aggregate CSV for offline analysis.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCENARIOS -->
+<section id="scenarios">
+  <div class="section-label">Scenarios</div>
+  <h2>Six clinical stress tests</h2>
+  <p class="section-intro">Each scenario is designed to expose a specific failure mode in the control algorithm.</p>
+  <div class="scenario-grid">
+    <div class="scenario-pill">
+      <strong>Baseline meal</strong>
+      <span>Standard 60 g carb bolus — sanity-check for time-in-range</span>
+    </div>
+    <div class="scenario-pill">
+      <strong>Missed bolus</strong>
+      <span>Meal without pre-bolus — how far does the correction loop recover?</span>
+    </div>
+    <div class="scenario-pill">
+      <strong>Dawn phenomenon</strong>
+      <span>3 AM cortisol-driven glucose rise with no meal event</span>
+    </div>
+    <div class="scenario-pill">
+      <strong>Exercise hypoglycemia</strong>
+      <span>Insulin sensitivity spike mid-activity — clamp test</span>
+    </div>
+    <div class="scenario-pill">
+      <strong>Late correction</strong>
+      <span>Correction bolus delayed 90 min — stacking risk assessment</span>
+    </div>
+    <div class="scenario-pill">
+      <strong>Basal deficit</strong>
+      <span>Under-programmed overnight basal — sustained drift above range</span>
+    </div>
+  </div>
+</section>
+
+<!-- SAFETY -->
+<section id="safety">
+  <div class="section-label">Safety</div>
+  <h2>Three layers, no exceptions</h2>
+  <p class="section-intro">
+    The safety architecture is enforced at every simulation tick. The controller cannot deliver insulin
+    outside these bounds regardless of the scenario configuration.
+  </p>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">🔴</div>
+      <h3>Hard clamps</h3>
+      <p>Absolute maximum bolus (10 U), maximum basal rate (3× programmed), and minimum glucose floor (60 mg/dL) before insulin delivery halts.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🟡</div>
+      <h3>IOB accounting</h3>
+      <p>Insulin-on-board is tracked continuously. Correction boluses are reduced or withheld when stacking risk exceeds threshold.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🟢</div>
+      <h3>Rate-of-change guard</h3>
+      <p>Rapid glucose drop (&gt;2 mg/dL/min) suspends basal delivery and flags a predictive low alert before the hypo occurs.</p>
+    </div>
+  </div>
+  <div class="safety-block">
+    <h3>⚠ Research use only</h3>
+    <p>
+      <strong>pancri.ai is a simulation research platform.</strong> It does not connect to any insulin pump,
+      continuous glucose monitor, or patient system. No real insulin is delivered. No patient data is
+      collected or stored. This platform is <strong>not a medical device</strong> and is not intended for
+      clinical decision-making. All scenarios use synthetic physiological parameters.
+    </p>
+  </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<div class="cta-section">
+  <h2>Ready to run a simulation?</h2>
+  <p>No account, no install. Opens directly in your browser.</p>
+  <div class="cta-group">
+    <a class="btn-primary" href="https://pancri.streamlit.app" target="_blank" rel="noopener">
+      ▶&nbsp; Open the simulation app
+    </a>
+    <a class="btn-secondary" href="https://github.com/roninazure/autonomous-glucose-sim" target="_blank" rel="noopener">
+      GitHub repository
+    </a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <span>© 2025 pancri.ai — Research prototype. Not a medical device.</span>
+    <span>
+      <a href="https://github.com/roninazure/autonomous-glucose-sim">GitHub</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/roninazure/autonomous-glucose-sim/blob/main/docs/safety_logic.md">Safety docs</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/roninazure/autonomous-glucose-sim/blob/main/README.md">README</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
