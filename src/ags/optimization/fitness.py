@@ -21,7 +21,7 @@ from __future__ import annotations
 import copy
 
 from ags.evaluation.profiles import ALL_PROFILES
-from ags.evaluation.runner import run_evaluation
+from ags.evaluation.runner import run_closed_loop_evaluation
 from ags.optimization.state import PSOConfig
 from ags.safety.state import SafetyThresholds
 from ags.simulation.scenarios import (
@@ -79,7 +79,7 @@ def evaluate_candidate(
                 insulin_peak_minutes=profile.insulin_peak_minutes,
             )
 
-            _records, summary = run_evaluation(
+            _records, summary = run_closed_loop_evaluation(
                 simulation_inputs=scenario,
                 safety_thresholds=safety,
                 duration_minutes=config.duration_minutes,
@@ -129,7 +129,7 @@ def params_to_tir(params: dict[str, float], config: PSOConfig) -> float:
                 insulin_peak_minutes=profile.insulin_peak_minutes,
             )
 
-            _records, summary = run_evaluation(
+            _records, summary = run_closed_loop_evaluation(
                 simulation_inputs=scenario,
                 safety_thresholds=safety,
                 duration_minutes=config.duration_minutes,

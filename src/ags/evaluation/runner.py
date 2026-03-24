@@ -252,7 +252,10 @@ def run_closed_loop_evaluation(
     seed: int = 42,
     target_glucose_mgdl: float = 110.0,
     correction_factor_mgdl_per_unit: float = 50.0,
-    autonomous_isf: bool = True,
+    min_excursion_delta_mgdl: float = 0.0,
+    microbolus_fraction: float = 0.25,
+    ror_tiered_microbolus: bool = False,
+    autonomous_isf: bool = False,
     initial_glucose_mgdl: float = 110.0,
 ) -> tuple[list[TimestepRecord], RunSummary]:
     """True closed-loop evaluation: delivered insulin changes the glucose trajectory.
@@ -349,6 +352,9 @@ def run_closed_loop_evaluation(
             insulin_on_board_u=step_iob_u,
             target_glucose_mgdl=target_glucose_mgdl,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
+            min_excursion_delta_mgdl=min_excursion_delta_mgdl,
+            microbolus_fraction=microbolus_fraction,
+            ror_tiered_microbolus=ror_tiered_microbolus,
             glucose_history=list(cgm_history),
             step_minutes=step_minutes,
             autonomous_isf=autonomous_isf,
