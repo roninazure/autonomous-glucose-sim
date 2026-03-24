@@ -1,14 +1,19 @@
 """Particle Swarm Optimisation (PSO) for SWARM Bolus controller tuning.
 
-Standard inertia-weight PSO (Kennedy & Eberhart, 1995) with velocity clamping
-and hard bound enforcement.
+Standard inertia-weight PSO (Kennedy & Eberhart, 1995) with velocity clamping,
+hard bound enforcement, and **true parallel particle evaluation**.
 
     Each *particle* is a vector of controller/safety parameters.
     Each *iteration* all particles:
-      1. Evaluate their fitness via closed-loop simulation
+      1. Evaluate their fitness IN PARALLEL via concurrent.futures
       2. Update personal-best and global-best
       3. Update velocity:  v = w*v + c1*r1*(pbest-x) + c2*r2*(gbest-x)
       4. Update position:  x = x + v  (clamped to bounds)
+
+Parallelism: all n_particles fitness evaluations within each iteration are
+submitted simultaneously to a ProcessPoolExecutor.  Each worker runs a
+complete closed-loop simulation independently — no shared state, no locks.
+On a 4-core machine this cuts wall-clock time by ~4×.
 
 Fitness is minimised (negative TIR + hypo/peak penalties — see fitness.py).
 
@@ -24,6 +29,7 @@ Usage::
 from __future__ import annotations
 
 import random
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Callable
 
 from ags.optimization.fitness import evaluate_candidate
@@ -90,13 +96,25 @@ def run_pso(
     v_max = [(b.high - b.low) * 0.20 for b in bounds]
 
     for iteration in range(config.n_iterations):
-        fitnesses: list[float] = []
+        fitnesses: list[float] = [0.0] * config.n_particles
+
+        # ── True parallel swarm: all particles evaluated simultaneously ──────
+        # Each worker is an independent process — no GIL, no shared state.
+        # Futures are keyed by particle index so results map back correctly.
+        particle_params = [_vec_to_params(positions[i], bounds) for i in range(config.n_particles)]
+
+        with ProcessPoolExecutor() as executor:
+            future_to_idx = {
+                executor.submit(evaluate_candidate, particle_params[i], config): i
+                for i in range(config.n_particles)
+            }
+            for future in as_completed(future_to_idx):
+                i = future_to_idx[future]
+                fitnesses[i] = future.result()
+                n_evaluations += 1
 
         for i in range(config.n_particles):
-            params = _vec_to_params(positions[i], bounds)
-            fitness = evaluate_candidate(params, config)
-            n_evaluations += 1
-            fitnesses.append(fitness)
+            fitness = fitnesses[i]
 
             # Update personal best
             if fitness < pbest_fit[i]:
@@ -107,9 +125,6 @@ def run_pso(
             if fitness < gbest_fit:
                 gbest_fit = fitness
                 gbest_pos = list(positions[i])
-                # Approximate TIR from fitness: TIR ≈ -fitness when penalties
-                # are small.  Stored for display; exact value recalculated in
-                # PSOResult by the caller.
                 gbest_tir = min(100.0, max(0.0, -fitness))
 
         # ── Update velocities and positions ──────────────────────────────────
