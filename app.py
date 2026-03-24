@@ -2095,7 +2095,7 @@ elif dashboard_mode == "PSO Optimizer":
         n_iterations=_pso_n_iterations,
         scenario_names=_pso_scenarios,
         hypo_penalty_weight=_pso_hypo_weight,
-        duration_minutes=180,
+        duration_minutes=480,
         step_minutes=5,
     )
 
