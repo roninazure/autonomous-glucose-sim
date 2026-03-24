@@ -1,19 +1,25 @@
 """Particle Swarm Optimisation (PSO) for SWARM Bolus controller tuning.
 
-Adaptive inertia-weight PSO (Shi & Eberhart, 1998) with:
+Adaptive inertia-weight PSO with ring topology (lbest):
   - Linearly decaying inertia w: 0.9 → 0.4 over the run
       Wide exploration early, tight exploitation late.
-      This is the standard improvement over fixed-w PSO (Kennedy & Eberhart 1995).
+  - Ring (lbest) topology — each particle's social attractor is the best
+      position seen by its immediate ring-neighbours {i-1, i, i+1}.
+      This prevents the premature convergence caused by global (gbest) topology,
+      where a single good particle instantly collapses the whole swarm onto one
+      point.  Knowledge spreads gradually around the ring; diversity is
+      maintained throughout the run.
   - Velocity clamping and hard bound enforcement
   - True parallel particle evaluation via a persistent ProcessPoolExecutor
 
     Each *particle* is a vector of controller/safety parameters.
     Each *iteration* all particles:
-      1. Compute adaptive inertia weight for this iteration
+      1. Compute adaptive inertia weight w(t)
       2. Evaluate ALL particles IN PARALLEL (persistent process pool)
-      3. Update personal-best and global-best
-      4. Update velocity:  v = w(t)*v + c1*r1*(pbest-x) + c2*r2*(gbest-x)
-      5. Update position:  x = x + v  (clamped to bounds)
+      3. Update personal-best (pbest) for each particle
+      4. Update ring-neighbourhood-best (lbest[i]) from {i-1, i, i+1} pbests
+      5. Update velocity:  v = w(t)*v + c1*r1*(pbest-x) + c2*r2*(lbest-x)
+      6. Update position:  x = x + v  (clamped to bounds)
 
 Parallelism: one ProcessPoolExecutor is created for the full run (not per
 iteration) so process spawn overhead is paid once.  All n_particles
@@ -83,13 +89,21 @@ def run_pso(
     rng = random.Random(config.seed)
     bounds = PARAMETER_BOUNDS
     n_dims = len(bounds)
+    n = config.n_particles
 
     # ── Initialise swarm ─────────────────────────────────────────────────────
-    positions: list[list[float]] = [_random_position(bounds, rng) for _ in range(config.n_particles)]
-    velocities: list[list[float]] = [_random_velocity(bounds, rng) for _ in range(config.n_particles)]
+    positions: list[list[float]] = [_random_position(bounds, rng) for _ in range(n)]
+    velocities: list[list[float]] = [_random_velocity(bounds, rng) for _ in range(n)]
     pbest_pos: list[list[float]] = [list(p) for p in positions]
-    pbest_fit: list[float] = [float("inf")] * config.n_particles
+    pbest_fit: list[float] = [float("inf")] * n
 
+    # Ring-topology neighbourhood best — initialised to each particle's own position.
+    # Recomputed each iteration from the three-member neighbourhood {i-1, i, i+1}.
+    lbest_pos: list[list[float]] = [list(p) for p in positions]
+    lbest_fit: list[float] = [float("inf")] * n
+
+    # Global best — tracked separately for result reporting only, not used as
+    # the social attractor (that role belongs to lbest).
     gbest_pos: list[float] = list(positions[0])
     gbest_fit: float = float("inf")
     gbest_tir: float = 0.0
@@ -103,7 +117,7 @@ def run_pso(
     # ── One persistent pool for the full run — spawn overhead paid once ───────
     with ProcessPoolExecutor() as executor:
         for iteration in range(config.n_iterations):
-            fitnesses: list[float] = [0.0] * config.n_particles
+            fitnesses: list[float] = [0.0] * n
 
             # ── Adaptive inertia weight (Shi & Eberhart 1998) ─────────────────
             # Decays linearly: wide exploration early, tight exploitation late.
@@ -113,43 +127,48 @@ def run_pso(
                 w = config.w_start
 
             # ── True parallel swarm: all particles evaluated simultaneously ───
-            particle_params = [_vec_to_params(positions[i], bounds) for i in range(config.n_particles)]
+            particle_params = [_vec_to_params(positions[i], bounds) for i in range(n)]
             future_to_idx = {
                 executor.submit(evaluate_candidate, particle_params[i], config): i
-                for i in range(config.n_particles)
+                for i in range(n)
             }
             for future in as_completed(future_to_idx):
                 i = future_to_idx[future]
                 fitnesses[i] = future.result()
                 n_evaluations += 1
 
-            for i in range(config.n_particles):
+            # ── Update personal-best and global-best (for reporting) ──────────
+            for i in range(n):
                 fitness = fitnesses[i]
-
-                # Update personal best
                 if fitness < pbest_fit[i]:
                     pbest_fit[i] = fitness
                     pbest_pos[i] = list(positions[i])
-
-                # Update global best
                 if fitness < gbest_fit:
                     gbest_fit = fitness
                     gbest_pos = list(positions[i])
                     gbest_tir = min(100.0, max(0.0, -fitness))
 
+            # ── Update ring-neighbourhood best (lbest) ────────────────────────
+            # Each particle's social attractor = best pbest in {i-1, i, i+1}.
+            # Using lbest instead of gbest maintains swarm diversity: no single
+            # discovery instantly pulls every particle away from its local search.
+            for i in range(n):
+                for nb in ((i - 1) % n, i, (i + 1) % n):
+                    if pbest_fit[nb] < lbest_fit[i]:
+                        lbest_fit[i] = pbest_fit[nb]
+                        lbest_pos[i] = list(pbest_pos[nb])
+
             # ── Update velocities and positions ──────────────────────────────
-            for i in range(config.n_particles):
+            for i in range(n):
                 for d in range(n_dims):
                     r1 = rng.random()
                     r2 = rng.random()
                     cognitive = config.c1 * r1 * (pbest_pos[i][d] - positions[i][d])
-                    social    = config.c2 * r2 * (gbest_pos[d]     - positions[i][d])
+                    social    = config.c2 * r2 * (lbest_pos[i][d] - positions[i][d])
                     velocities[i][d] = (
                         w * velocities[i][d] + cognitive + social
                     )
-                    # Clamp velocity
                     velocities[i][d] = _clip(velocities[i][d], -v_max[d], v_max[d])
-                    # Move particle
                     positions[i][d] = _clip(
                         positions[i][d] + velocities[i][d],
                         bounds[d].low,
