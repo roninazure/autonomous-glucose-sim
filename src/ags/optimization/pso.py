@@ -43,7 +43,7 @@ import random
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Callable
 
-from ags.optimization.fitness import evaluate_candidate
+from ags.optimization.fitness import evaluate_candidate, params_to_tir
 from ags.optimization.state import (
     PARAMETER_BOUNDS,
     PSOBounds,
@@ -188,11 +188,15 @@ def run_pso(
                 progress_callback(iteration + 1, config.n_iterations, gbest_fit, gbest_tir)
 
     best_params = _vec_to_params(gbest_pos, bounds)
+    # Compute accurate TIR from the best params directly — gbest_tir accumulated
+    # during the loop is unreliable because fitness = -TIR + penalties, so
+    # -fitness ≠ TIR when penalties are nonzero.
+    best_tir_pct = params_to_tir(best_params, config)
 
     return PSOResult(
         best_params=best_params,
         best_fitness=gbest_fit,
-        best_tir_pct=gbest_tir,
+        best_tir_pct=best_tir_pct,
         history=history,
         n_evaluations=n_evaluations,
     )
