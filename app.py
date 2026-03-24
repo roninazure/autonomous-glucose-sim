@@ -34,6 +34,9 @@ from ags.simulation.scenarios import (
     sustained_basal_deficit_scenario,
 )
 from ags.simulation.state import MealEvent, SimulationInputs
+from ags.optimization.pso import run_pso
+from ags.optimization.fitness import NAMED_SCENARIOS, params_to_tir
+from ags.optimization.state import PSOConfig, PARAMETER_BOUNDS
 
 # ── Palette ─────────────────────────────────────────────────────────────────
 # Clinical light theme — white/light-grey, high contrast, readable at any size.
@@ -775,7 +778,7 @@ with st.sidebar:
     if _nav_research_open:
         _nav_research = st.radio(
             "",
-            ["A vs B Comparison", "Population Sweep"],
+            ["A vs B Comparison", "Population Sweep", "PSO Optimizer"],
             key="nav_research",
             label_visibility="collapsed",
         )
@@ -793,6 +796,7 @@ with st.sidebar:
         "Retrospective CGM Replay": "Retrospective Replay",
         "A vs B Comparison":     "Comparison",
         "Population Sweep":      "Profile Sweep",
+        "PSO Optimizer":         "PSO Optimizer",
     }
     dashboard_mode = _MODE_KEY[_dashboard_mode_raw]
 
@@ -814,6 +818,31 @@ with st.sidebar:
         st.caption(SCENARIO_DESCRIPTIONS.get(sweep_scenario_name, ""))
         scenario_a_name = sweep_scenario_name
         scenario_b_name = sweep_scenario_name
+    elif dashboard_mode == "PSO Optimizer":
+        st.caption(
+            "Particle Swarm Optimisation tunes 7 controller & safety parameters "
+            "to maximise Time in Range across patient profiles and scenarios."
+        )
+        st.header("PSO Scenarios")
+        _pso_scenario_options = list(NAMED_SCENARIOS.keys())
+        _pso_selected_scenarios = st.multiselect(
+            "Evaluate against",
+            options=_pso_scenario_options,
+            default=["Baseline Meal", "Dawn Phenomenon", "Missed Bolus"],
+            help="PSO will optimise for average TIR across all selected scenarios × 4 patient profiles.",
+        )
+        st.header("PSO Hyperparameters")
+        _pso_n_particles = st.slider("Particles", 5, 40, 20, 5)
+        _pso_n_iterations = st.slider("Iterations", 5, 60, 20, 5)
+        _pso_hypo_weight = st.slider(
+            "Hypo penalty weight",
+            1.0, 10.0, 3.0, 0.5,
+            help="Multiplier applied to time-below-range % in the fitness function. "
+                 "Higher = PSO avoids low-glucose events more aggressively.",
+        )
+        # Dummy variables so downstream code that reads scenario_a/b names won't crash
+        scenario_a_name = "Baseline Meal"
+        scenario_b_name = "Baseline Meal"
     else:  # Retrospective Replay
         retro_source = st.radio(
             "CGM data source",
@@ -881,6 +910,25 @@ with st.sidebar:
         duration_minutes            = 240
         step_minutes                = 5
         max_units_per_interval      = 1.0
+        max_insulin_on_board_u      = 3.0
+        min_predicted_glucose_mgdl  = 80
+        require_confirmed_trend     = True
+        min_excursion_delta         = 0.0
+        microbolus_fraction         = 0.25
+        _dw_enabled                 = False
+        _dw_imm_frac                = 0.33
+        _dw_ext_dur                 = 20
+        dose_increment_u            = 0.05
+        pump_max_units_per_interval = 1.0
+
+    elif dashboard_mode == "PSO Optimizer":
+        # PSO uses its own config panel (rendered above in Clinical Scenario section)
+        # Provide dummy values for variables that downstream code may reference.
+        _autonomous_isf             = False
+        correction_factor_mgdl_per_unit = 50.0
+        duration_minutes            = 180
+        step_minutes                = 5
+        max_units_per_interval      = 0.30
         max_insulin_on_board_u      = 3.0
         min_predicted_glucose_mgdl  = 80
         require_confirmed_trend     = True
@@ -1028,6 +1076,7 @@ with st.sidebar:
         "Comparison": "Run Comparison",
         "Profile Sweep": "Run Population Sweep",
         "Retrospective Replay": "Run Retrospective Replay",
+        "PSO Optimizer": "Run PSO Optimisation",
     }
     _btn_label = _btn_labels.get(dashboard_mode, "Run")
     run_button = st.button(_btn_label, type="primary")
@@ -2039,6 +2088,152 @@ if run_button:
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+elif dashboard_mode == "PSO Optimizer":
+    # ── PSO Optimisation run ───────────────────────────────────────────────
+    _pso_scenarios = _pso_selected_scenarios if _pso_selected_scenarios else ["Baseline Meal"]
+    _pso_config = PSOConfig(
+        n_particles=_pso_n_particles,
+        n_iterations=_pso_n_iterations,
+        scenario_names=_pso_scenarios,
+        hypo_penalty_weight=_pso_hypo_weight,
+        duration_minutes=180,
+        step_minutes=5,
+    )
+
+    # ── Header ────────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="font-family:'Inter',sans-serif; font-size:1.1rem; font-weight:700;
+                color:{CYAN}; margin-bottom:0.5rem;">
+      PSO Parameter Optimisation
+    </div>
+    <div style="font-family:'Inter',sans-serif; font-size:0.85rem; color:{MUTED};
+                margin-bottom:1rem; line-height:1.6;">
+      {_pso_n_particles} particles &times; {_pso_n_iterations} iterations &nbsp;&middot;&nbsp;
+      {len(_pso_scenarios)} scenario(s) &times; 4 patient profiles
+      = {_pso_n_particles * _pso_n_iterations * len(_pso_scenarios) * 4:,} total simulations
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Default params TIR (baseline to compare against) ─────────────────
+    _default_params = {
+        "target_glucose_mgdl": 110.0,
+        "correction_factor_mgdl_per_unit": 50.0,
+        "microbolus_fraction": 0.25,
+        "min_excursion_delta_mgdl": 0.0,
+        "max_units_per_interval": 0.30,
+        "max_insulin_on_board_u": 3.0,
+        "min_predicted_glucose_mgdl": 80.0,
+    }
+
+    _progress_bar = st.progress(0.0, text="Initialising PSO swarm…")
+    _iter_placeholder = st.empty()
+
+    def _pso_progress(iteration: int, total: int, best_fitness: float, best_tir: float) -> None:
+        frac = iteration / total
+        _progress_bar.progress(frac, text=f"Iteration {iteration}/{total}  ·  Best fitness {best_fitness:.2f}")
+        _iter_placeholder.markdown(
+            f"<div style='font-family:JetBrains Mono,monospace;font-size:0.8rem;color:{MUTED};'>"
+            f"Iteration {iteration}/{total} &nbsp;|&nbsp; best fitness {best_fitness:.3f}</div>",
+            unsafe_allow_html=True,
+        )
+
+    with st.spinner("Running PSO…"):
+        _pso_result = run_pso(config=_pso_config, progress_callback=_pso_progress)
+
+    _progress_bar.progress(1.0, text="Done.")
+
+    # ── Baseline TIR ─────────────────────────────────────────────────────
+    with st.spinner("Evaluating default parameters for comparison…"):
+        _default_tir = params_to_tir(_default_params, _pso_config)
+
+    # ── Recalculate best TIR properly (PSO stores approx) ─────────────────
+    with st.spinner("Scoring best parameters…"):
+        _best_tir = params_to_tir(_pso_result.best_params, _pso_config)
+
+    # ── KPI row ───────────────────────────────────────────────────────────
+    _delta_tir = _best_tir - _default_tir
+    _delta_sign = "+" if _delta_tir >= 0 else ""
+    _delta_color = NEON if _delta_tir >= 0 else RED
+    _kpi_col1, _kpi_col2, _kpi_col3 = st.columns(3)
+    with _kpi_col1:
+        st.metric("Default TIR (mean)", f"{_default_tir:.1f}%")
+    with _kpi_col2:
+        st.metric("Optimised TIR (mean)", f"{_best_tir:.1f}%", delta=f"{_delta_sign}{_delta_tir:.1f}%")
+    with _kpi_col3:
+        st.metric("Total simulations run", f"{_pso_result.n_evaluations:,}")
+
+    # ── Convergence chart ─────────────────────────────────────────────────
+    _hist_df = pd.DataFrame([
+        {"Iteration": h.iteration, "Best Fitness": h.best_fitness, "Mean Fitness": h.mean_fitness}
+        for h in _pso_result.history
+    ])
+    _conv_fig = go.Figure()
+    _conv_fig.add_trace(go.Scatter(
+        x=_hist_df["Iteration"], y=_hist_df["Best Fitness"],
+        mode="lines", name="Best fitness",
+        line=dict(color=NEON, width=2),
+    ))
+    _conv_fig.add_trace(go.Scatter(
+        x=_hist_df["Iteration"], y=_hist_df["Mean Fitness"],
+        mode="lines", name="Swarm mean",
+        line=dict(color=AMBER, width=1.5, dash="dot"),
+    ))
+    _conv_fig.update_layout(
+        title="PSO Convergence",
+        xaxis_title="Iteration",
+        yaxis_title="Fitness (lower = better)",
+        height=300,
+        paper_bgcolor=BG,
+        plot_bgcolor=BG,
+        font=dict(family="Inter", color=WHITE),
+        legend=dict(orientation="h", yanchor="top", y=1.12),
+    )
+    st.plotly_chart(_conv_fig, use_container_width=True)
+
+    # ── Best parameters table ─────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="font-family:'Inter',sans-serif; font-size:0.8rem; font-weight:700;
+                color:{CYAN}; text-transform:uppercase; letter-spacing:0.5px;
+                margin:1rem 0 0.4rem 0;">
+      Optimised Parameters vs Defaults
+    </div>
+    """, unsafe_allow_html=True)
+
+    _param_rows = []
+    for _pb in PARAMETER_BOUNDS:
+        _best_val = _pso_result.best_params[_pb.name]
+        _def_val  = _default_params[_pb.name]
+        _diff     = _best_val - _def_val
+        _param_rows.append({
+            "Parameter": _pb.description,
+            "Default": round(_def_val, 3),
+            "Optimised": round(_best_val, 3),
+            "Change": f"{'+' if _diff >= 0 else ''}{_diff:.3f}",
+        })
+    _param_df = pd.DataFrame(_param_rows)
+    st.dataframe(_param_df, use_container_width=True, hide_index=True)
+
+    # ── Export ────────────────────────────────────────────────────────────
+    import json as _json
+    _export = {
+        "best_params": _pso_result.best_params,
+        "best_tir_pct": round(_best_tir, 2),
+        "default_tir_pct": round(_default_tir, 2),
+        "delta_tir_pct": round(_delta_tir, 2),
+        "n_evaluations": _pso_result.n_evaluations,
+        "pso_config": {
+            "n_particles": _pso_config.n_particles,
+            "n_iterations": _pso_config.n_iterations,
+            "scenarios": _pso_config.scenario_names,
+        },
+    }
+    st.download_button(
+        "Download optimised parameters (JSON)",
+        data=_json.dumps(_export, indent=2),
+        file_name="pso_best_params.json",
+        mime="application/json",
+    )
 
 else:
     # ── Landing state ─────────────────────────────────────────────────────
