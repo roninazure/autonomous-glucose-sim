@@ -819,27 +819,25 @@ with st.sidebar:
         scenario_a_name = sweep_scenario_name
         scenario_b_name = sweep_scenario_name
     elif dashboard_mode == "PSO Optimizer":
-        st.caption(
-            "Particle Swarm Optimisation tunes 7 controller & safety parameters "
-            "to maximise Time in Range across patient profiles and scenarios."
-        )
-        st.header("PSO Scenarios")
-        _pso_scenario_options = list(NAMED_SCENARIOS.keys())
-        _pso_selected_scenarios = st.multiselect(
-            "Evaluate against",
-            options=_pso_scenario_options,
-            default=["Baseline Meal", "Dawn Phenomenon", "Missed Bolus"],
-            help="PSO will optimise for average TIR across all selected scenarios × 4 patient profiles.",
-        )
-        st.header("PSO Hyperparameters")
-        _pso_n_particles = st.slider("Particles", 5, 40, 20, 5)
-        _pso_n_iterations = st.slider("Iterations", 5, 60, 20, 5)
-        _pso_hypo_weight = st.slider(
-            "Hypo penalty weight",
-            1.0, 10.0, 3.0, 0.5,
-            help="Multiplier applied to time-below-range % in the fitness function. "
-                 "Higher = PSO avoids low-glucose events more aggressively.",
-        )
+        st.markdown(f"""
+<div style="background:rgba(29,78,216,0.07); border:1.5px solid {CYAN};
+            border-radius:8px; padding:0.85rem 1rem; margin:0.6rem 0 0.4rem 0;">
+  <div style="font-size:0.72rem; font-weight:700; color:{CYAN};
+              text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.4rem;">
+    Fully Autonomous · No configuration required
+  </div>
+  <div style="font-size:0.82rem; color:{WHITE}; line-height:1.6;">
+    The swarm evaluates all 6 clinical scenarios across all 4 patient
+    archetypes and finds the optimal parameter set automatically.<br/>
+    Press <strong>Run PSO Optimisation</strong> — nothing else to set.
+  </div>
+</div>""", unsafe_allow_html=True)
+        # All PSO config is hardcoded — no user input needed.
+        # These are the clinical defaults used every time.
+        _pso_selected_scenarios = list(NAMED_SCENARIOS.keys())  # all scenarios
+        _pso_n_particles = 20
+        _pso_n_iterations = 25
+        _pso_hypo_weight = 3.0
         # Dummy variables so downstream code that reads scenario_a/b names won't crash
         scenario_a_name = "Baseline Meal"
         scenario_b_name = "Baseline Meal"
@@ -1076,7 +1074,7 @@ with st.sidebar:
         "Comparison": "Run Comparison",
         "Profile Sweep": "Run Population Sweep",
         "Retrospective Replay": "Run Retrospective Replay",
-        "PSO Optimizer": "Run PSO Optimisation",
+        "PSO Optimizer": "Optimise Autonomously",
     }
     _btn_label = _btn_labels.get(dashboard_mode, "Run")
     run_button = st.button(_btn_label, type="primary")
@@ -2105,13 +2103,17 @@ elif dashboard_mode == "PSO Optimizer":
     st.markdown(f"""
     <div style="font-family:'Inter',sans-serif; font-size:1.1rem; font-weight:700;
                 color:{CYAN}; margin-bottom:0.5rem;">
-      PSO Parameter Optimisation
+      Autonomous Parameter Optimisation
     </div>
     <div style="font-family:'Inter',sans-serif; font-size:0.85rem; color:{MUTED};
                 margin-bottom:1rem; line-height:1.6;">
-      {_pso_n_particles} particles &times; {_pso_n_iterations} iterations &nbsp;&middot;&nbsp;
-      {len(_pso_scenarios)} scenario(s) &times; 4 patient profiles
-      = {_pso_n_particles * _pso_n_iterations * len(_pso_scenarios) * 4:,} total simulations
+      Swarm of {_pso_n_particles} particles &times; {_pso_n_iterations} iterations
+      &nbsp;&middot;&nbsp; {len(_pso_scenarios)} scenarios &times; 4 patient archetypes
+      &nbsp;&middot;&nbsp;
+      <strong style="color:{WHITE};">
+        {_pso_n_particles * _pso_n_iterations * len(_pso_scenarios) * 4:,} closed-loop simulations
+      </strong>
+      &nbsp;&mdash;&nbsp; fully autonomous, no configuration required
     </div>
     """, unsafe_allow_html=True)
 
