@@ -1,14 +1,24 @@
 """Particle Swarm Optimisation (PSO) for SWARM Bolus controller tuning.
 
-Standard inertia-weight PSO (Kennedy & Eberhart, 1995) with velocity clamping
-and hard bound enforcement.
+Adaptive inertia-weight PSO (Shi & Eberhart, 1998) with:
+  - Linearly decaying inertia w: 0.9 → 0.4 over the run
+      Wide exploration early, tight exploitation late.
+      This is the standard improvement over fixed-w PSO (Kennedy & Eberhart 1995).
+  - Velocity clamping and hard bound enforcement
+  - True parallel particle evaluation via a persistent ProcessPoolExecutor
 
     Each *particle* is a vector of controller/safety parameters.
     Each *iteration* all particles:
-      1. Evaluate their fitness via closed-loop simulation
-      2. Update personal-best and global-best
-      3. Update velocity:  v = w*v + c1*r1*(pbest-x) + c2*r2*(gbest-x)
-      4. Update position:  x = x + v  (clamped to bounds)
+      1. Compute adaptive inertia weight for this iteration
+      2. Evaluate ALL particles IN PARALLEL (persistent process pool)
+      3. Update personal-best and global-best
+      4. Update velocity:  v = w(t)*v + c1*r1*(pbest-x) + c2*r2*(gbest-x)
+      5. Update position:  x = x + v  (clamped to bounds)
+
+Parallelism: one ProcessPoolExecutor is created for the full run (not per
+iteration) so process spawn overhead is paid once.  All n_particles
+evaluations per iteration are submitted simultaneously — each worker runs a
+complete closed-loop simulation independently with no shared state.
 
 Fitness is minimised (negative TIR + hypo/peak penalties — see fitness.py).
 
@@ -24,6 +34,7 @@ Usage::
 from __future__ import annotations
 
 import random
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Callable
 
 from ags.optimization.fitness import evaluate_candidate
@@ -89,59 +100,73 @@ def run_pso(
     # ── Velocity clamp: ±20 % of range ───────────────────────────────────────
     v_max = [(b.high - b.low) * 0.20 for b in bounds]
 
-    for iteration in range(config.n_iterations):
-        fitnesses: list[float] = []
+    # ── One persistent pool for the full run — spawn overhead paid once ───────
+    with ProcessPoolExecutor() as executor:
+        for iteration in range(config.n_iterations):
+            fitnesses: list[float] = [0.0] * config.n_particles
 
-        for i in range(config.n_particles):
-            params = _vec_to_params(positions[i], bounds)
-            fitness = evaluate_candidate(params, config)
-            n_evaluations += 1
-            fitnesses.append(fitness)
+            # ── Adaptive inertia weight (Shi & Eberhart 1998) ─────────────────
+            # Decays linearly: wide exploration early, tight exploitation late.
+            if config.n_iterations > 1:
+                w = config.w_start - (config.w_start - config.w_end) * iteration / (config.n_iterations - 1)
+            else:
+                w = config.w_start
 
-            # Update personal best
-            if fitness < pbest_fit[i]:
-                pbest_fit[i] = fitness
-                pbest_pos[i] = list(positions[i])
+            # ── True parallel swarm: all particles evaluated simultaneously ───
+            particle_params = [_vec_to_params(positions[i], bounds) for i in range(config.n_particles)]
+            future_to_idx = {
+                executor.submit(evaluate_candidate, particle_params[i], config): i
+                for i in range(config.n_particles)
+            }
+            for future in as_completed(future_to_idx):
+                i = future_to_idx[future]
+                fitnesses[i] = future.result()
+                n_evaluations += 1
 
-            # Update global best
-            if fitness < gbest_fit:
-                gbest_fit = fitness
-                gbest_pos = list(positions[i])
-                # Approximate TIR from fitness: TIR ≈ -fitness when penalties
-                # are small.  Stored for display; exact value recalculated in
-                # PSOResult by the caller.
-                gbest_tir = min(100.0, max(0.0, -fitness))
+            for i in range(config.n_particles):
+                fitness = fitnesses[i]
 
-        # ── Update velocities and positions ──────────────────────────────────
-        for i in range(config.n_particles):
-            for d in range(n_dims):
-                r1 = rng.random()
-                r2 = rng.random()
-                cognitive = config.c1 * r1 * (pbest_pos[i][d] - positions[i][d])
-                social    = config.c2 * r2 * (gbest_pos[d]     - positions[i][d])
-                velocities[i][d] = (
-                    config.w * velocities[i][d] + cognitive + social
-                )
-                # Clamp velocity
-                velocities[i][d] = _clip(velocities[i][d], -v_max[d], v_max[d])
-                # Move particle
-                positions[i][d] = _clip(
-                    positions[i][d] + velocities[i][d],
-                    bounds[d].low,
-                    bounds[d].high,
-                )
+                # Update personal best
+                if fitness < pbest_fit[i]:
+                    pbest_fit[i] = fitness
+                    pbest_pos[i] = list(positions[i])
 
-        mean_fitness = sum(fitnesses) / len(fitnesses)
-        snap = PSOIteration(
-            iteration=iteration + 1,
-            best_fitness=gbest_fit,
-            best_tir_pct=gbest_tir,
-            mean_fitness=mean_fitness,
-        )
-        history.append(snap)
+                # Update global best
+                if fitness < gbest_fit:
+                    gbest_fit = fitness
+                    gbest_pos = list(positions[i])
+                    gbest_tir = min(100.0, max(0.0, -fitness))
 
-        if progress_callback:
-            progress_callback(iteration + 1, config.n_iterations, gbest_fit, gbest_tir)
+            # ── Update velocities and positions ──────────────────────────────
+            for i in range(config.n_particles):
+                for d in range(n_dims):
+                    r1 = rng.random()
+                    r2 = rng.random()
+                    cognitive = config.c1 * r1 * (pbest_pos[i][d] - positions[i][d])
+                    social    = config.c2 * r2 * (gbest_pos[d]     - positions[i][d])
+                    velocities[i][d] = (
+                        w * velocities[i][d] + cognitive + social
+                    )
+                    # Clamp velocity
+                    velocities[i][d] = _clip(velocities[i][d], -v_max[d], v_max[d])
+                    # Move particle
+                    positions[i][d] = _clip(
+                        positions[i][d] + velocities[i][d],
+                        bounds[d].low,
+                        bounds[d].high,
+                    )
+
+            mean_fitness = sum(fitnesses) / len(fitnesses)
+            snap = PSOIteration(
+                iteration=iteration + 1,
+                best_fitness=gbest_fit,
+                best_tir_pct=gbest_tir,
+                mean_fitness=mean_fitness,
+            )
+            history.append(snap)
+
+            if progress_callback:
+                progress_callback(iteration + 1, config.n_iterations, gbest_fit, gbest_tir)
 
     best_params = _vec_to_params(gbest_pos, bounds)
 

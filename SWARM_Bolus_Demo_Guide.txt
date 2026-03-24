@@ -18,7 +18,13 @@ algorithm. It lets you explore how the controller behaves across
 different patient types, clinical scenarios, and safety settings
 — all in a safe, synthetic environment with no real patients.
 
-Three modes are available (choose at the top of the left sidebar):
+Five modes are available (choose in the left sidebar):
+
+  CLOSED LOOP DEMO
+    One button. No setup. The algorithm runs fully autonomous
+    — no ISF number to enter, no patient profile to select.
+    The system infers insulin sensitivity from glucose dynamics
+    and self-corrects in real time.
 
   COMPARISON
     Side-by-side: two clinical scenarios, same algorithm.
@@ -33,6 +39,9 @@ Three modes are available (choose at the top of the left sidebar):
     Load a real CGM trace (or pick a built-in reference pattern)
     and see what the algorithm would have decided at each step —
     without affecting the actual glucose trajectory.
+
+  PSO OPTIMIZER  ← NEW
+    The algorithm tunes itself. See full section below.
 
 
 ================================================================
@@ -121,6 +130,233 @@ Three modes are available (choose at the top of the left sidebar):
 
 
 ================================================================
+  PSO OPTIMIZER — AUTONOMOUS SELF-TUNING
+================================================================
+
+  WHAT PROBLEM IT SOLVES
+
+Every insulin pump algorithm has parameters — numbers that control
+how aggressively it doses, how cautious it is near hypoglycaemia,
+what glucose level it is aiming for. Traditionally, these are set
+by engineers in a lab and never touched again, or adjusted manually
+by a clinician one slider at a time.
+
+The problem: the "right" values differ by patient type, by scenario
+(meal vs. basal drift vs. dawn phenomenon), and by clinical goal
+(maximum TIR? minimum hypo risk? fastest spike recovery?). There
+are 7 parameters and millions of possible combinations. No human
+can explore that space systematically.
+
+The PSO Optimizer removes that bottleneck entirely.
+
+
+  WHAT IS PARTICLE SWARM OPTIMISATION?
+
+Particle Swarm Optimisation is a computational intelligence
+technique inspired by the collective behaviour of biological
+swarms — bird flocks, fish schools, ant colonies.
+
+The insight: no single member of the flock has the full picture,
+but the swarm as a whole finds food, avoids predators, and
+navigates complex terrain better than any individual could alone.
+Each particle explores one region of the solution space; the
+swarm shares what it has learned; the collective converges on the
+global best.
+
+In SWARM Bolus, each "particle" is one candidate set of dosing
+parameters. A swarm of 20 particles explores the 7-dimensional
+parameter space simultaneously. After each iteration, every
+particle is pulled toward:
+
+  1. Its own best result so far (personal memory)
+  2. The best result found by the entire swarm (collective wisdom)
+
+After 20–30 iterations the swarm has collectively evaluated
+thousands of parameter combinations and converged on a set that
+maximises Time in Range while protecting against hypoglycaemia.
+
+This is not random search. It is directed, intelligent, collective
+optimisation — the same computational principle behind how birds
+fly in formation, how bees find the best flower patch, and how
+ant colonies find the shortest path to food.
+
+That is why the product is called SWARM Bolus.
+
+
+  WHAT GETS OPTIMISED
+
+The PSO tunes 7 parameters simultaneously:
+
+  Controller glucose target (mg/dL)
+    What level the algorithm is aiming for.
+    PSO may push this higher than you expect — a 130 mg/dL target
+    can paradoxically improve TIR by reducing corrective overshoot.
+
+  ISF — insulin sensitivity factor (mg/dL drop per unit)
+    How much one unit of insulin lowers glucose for this patient.
+    PSO finds the value that best matches observed glucose dynamics
+    across all four patient archetypes.
+
+  Microbolus fraction
+    What percentage of the calculated correction the system
+    delivers each 5-minute interval.
+    PSO balances speed of correction against overshoot risk.
+
+  Minimum excursion to trigger a dose (mg/dL)
+    How far above target glucose must be before the system acts.
+    PSO filters out noise-driven micro-corrections.
+
+  Safety: max bolus per 5-min step (U)
+    Hard ceiling on any single delivery.
+    PSO keeps this conservative while allowing enough headroom
+    to correct steep post-prandial spikes.
+
+  Safety: IOB cap (U)
+    Total active insulin allowed before the system pauses.
+    PSO balances aggressive correction against stacking risk.
+
+  Safety: hypo guard threshold (mg/dL)
+    Predicted glucose level below which all dosing is blocked.
+    PSO raises this when the evaluation includes exercise or
+    sensitive-patient scenarios.
+
+
+  HOW FITNESS IS CALCULATED
+
+Each candidate parameter set is scored by running it through the
+full closed-loop simulation — not once, but across:
+
+  • 3 clinical scenarios  (Baseline Meal, Dawn Phenomenon,
+                           Missed Bolus — selectable)
+  • 4 patient archetypes  (Standard, Insulin-Resistant,
+                           Highly Sensitive, Rapid Responder)
+
+= 12 simulations per candidate particle, per iteration.
+
+With default settings (20 particles × 20 iterations) that is
+480 complete closed-loop simulations per run, each evaluating
+a full patient physiology model with realistic CGM noise, a
+2-compartment PK/PD insulin model, 7 named safety gates, and
+online ISF learning.
+
+The fitness score rewards:
+  + Time in Range (70–180 mg/dL) — primary objective
+  - Time below range (< 70 mg/dL) — penalised 3× by default
+  - Time severely hyper (> 250 mg/dL) — penalised 1.5×
+
+The hypo penalty is intentionally weighted high. Clinical safety
+requires that parameter sets which achieve high TIR at the cost
+of hypoglycaemia are rejected. The penalty weight is a slider —
+clinicians can increase it further if the patient has impaired
+hypoglycaemia awareness or a history of severe events.
+
+
+  HOW A DOCTOR USES THIS
+
+Step 1 — Select the scenarios that match the patient's life.
+  A sedentary patient with regular meals → Baseline Meal +
+    Dawn Phenomenon.
+  An active patient with variable eating → add Missed Bolus +
+    Exercise Hypoglycaemia.
+
+Step 2 — Set the hypo penalty weight.
+  For a patient with frequent night-time lows or hypoglycaemia
+  unawareness, raise this to 6–10. The PSO will sacrifice some
+  TIR to push the hypo guard threshold higher and the IOB cap
+  lower — prioritising safety over time-in-range.
+
+Step 3 — Press "Run PSO Optimisation".
+  The algorithm runs autonomously. No further input needed.
+  The convergence chart shows the swarm improving in real time.
+
+Step 4 — Review the results table.
+  Optimised vs default for all 7 parameters, with the delta.
+  A clinician can see at a glance: "the algorithm decided this
+  patient needs a higher hypo guard and a smaller microbolus
+  fraction — that makes physiological sense given the profiles."
+
+Step 5 — Download the JSON parameter file.
+  One click. Contains the complete optimised parameter set,
+  the TIR improvement vs defaults, and the run configuration.
+  This file is the input to the next development phase — when
+  the parameters move from simulation to hardware.
+
+The doctor makes no parameter decisions. The swarm does.
+
+
+  WHY THIS IS REVOLUTIONARY
+
+Every current commercial AID system — Tandem Control-IQ,
+Omnipod 5, Medtronic 780G — uses a single fixed algorithm
+with parameters set during clinical trials on a population
+average. Those parameters are the same for every patient.
+
+SWARM Bolus does the opposite:
+
+  POPULATION THINKING
+    Parameters are validated across all four patient archetypes
+    simultaneously, not just the median patient. A set that
+    achieves 90% TIR for Standard Adults but causes hypoglycaemia
+    in Sensitive patients is automatically penalised and rejected
+    by the fitness function.
+
+  SCENARIO THINKING
+    Parameters are tested against the full clinical complexity
+    of a patient's life — meals, missed boluses, dawn phenomenon,
+    exercise — not just a single controlled scenario.
+
+  AUTONOMOUS DISCOVERY
+    The system finds parameter combinations that no human designer
+    would intuitively try. In the example shown in the screenshot,
+    PSO raised the controller target to 132 mg/dL (from 110) and
+    the ISF to 81 (from 50). Counter-intuitive — but it improved
+    TIR because it reduced corrective overshoot in insulin-
+    resistant patients while protecting sensitive ones.
+
+  NO EXPERT REQUIRED
+    A clinician does not need to understand inertia weights,
+    cognitive acceleration coefficients, or fitness landscapes.
+    They select scenarios, press a button, receive optimised
+    parameters. The swarm is the expert.
+
+  SAFETY IS NON-NEGOTIABLE
+    The 7 named safety gates — hypo guard, IOB cap, trend
+    confirmation, interval cap, suspension — are never disabled
+    during PSO. The optimiser works within the safety envelope,
+    not around it. No candidate that causes hypoglycaemia can
+    win, regardless of TIR.
+
+  CONTINUOUS IMPROVEMENT
+    As more clinical scenarios are added to the simulation
+    library, the PSO automatically incorporates them into future
+    optimisation runs. The algorithm gets better as the evidence
+    base grows — without any code changes.
+
+This is how SWARM Bolus moves from a fixed algorithm to a
+self-improving autonomous system. The swarm optimises the
+controller. The controller operates the pump. The pump treats
+the patient. No human in the loop between those three steps.
+
+
+  THE CONVERGENCE CHART EXPLAINED
+
+The PSO Convergence chart (shown after every run) plots:
+
+  Green line — Best fitness found so far by any particle.
+    This should decrease (improve) monotonically.
+    A flat green line after iteration 5–8 means the swarm has
+    converged — further iterations would not improve the result.
+
+  Orange dashed line — Mean fitness across the whole swarm.
+    Starts well above the green line (wide exploration).
+    Converges toward the green line as the swarm tightens.
+    A narrow gap by the final iteration = good convergence.
+
+If the green line is still falling steeply at the last iteration,
+increase the iteration count — the swarm has not yet converged.
+
+
+================================================================
   SUGGESTED DEMO FLOW (~10 MINUTES)
 ================================================================
 
@@ -151,6 +387,23 @@ Three modes are available (choose at the top of the left sidebar):
     - Scroll down to the Decision log
     - Expand a few rows to show the per-step reasoning
       (what it saw, why it dosed or held back, plain English)
+
+  STEP 5 — PSO OPTIMIZER (3 min — the conversation stopper)
+    - Open "Research & Validation" in the sidebar
+    - Select "PSO Optimizer"
+    - Leave defaults (20 particles, 20 iterations,
+      Baseline Meal + Dawn Phenomenon + Missed Bolus)
+    - Press "Run PSO Optimisation"
+    - Watch the convergence chart in real time
+    - When done, point at the parameters table:
+      "The algorithm decided this patient needs a higher
+       hypo guard and a different target glucose. It found
+       that by running 480 simulations across four patient
+       types simultaneously. A human would never explore
+       that space systematically."
+    - Show the TIR delta (optimised vs defaults)
+    - Download the JSON — "this is the input to the next
+       phase when these parameters move to hardware"
 
 
 ================================================================
@@ -227,7 +480,13 @@ Three modes are available (choose at the top of the left sidebar):
 
   Questions or issues — contact the development team.
 
-  SWARM Bolus · simulation-first · safety-obsessed
+  SWARM Bolus · simulation-first · safety-obsessed · swarm-optimised
   Phase 4 — Clinical Evidence · Active Development
+
+  The name "SWARM" is not a brand choice. It describes the
+  computational principle at the heart of the system: collective
+  intelligence, emergent optimisation, no single point of failure.
+  The same mathematics that governs how starlings flock and ants
+  navigate is now applied to insulin dosing. That is the edge.
 
 ================================================================

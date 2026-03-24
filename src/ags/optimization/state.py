@@ -31,9 +31,11 @@ class PSOConfig:
     """Hyperparameters for the PSO run."""
     n_particles: int = 20
     n_iterations: int = 30
-    w: float = 0.72       # inertia weight
-    c1: float = 1.49      # cognitive (personal best) acceleration
-    c2: float = 1.49      # social (global best) acceleration
+    w_start: float = 0.90  # inertia at iteration 0 — wide exploration
+    w_end: float   = 0.40  # inertia at final iteration — tight exploitation
+    # w decays linearly: w(t) = w_start - (w_start - w_end) * t / (n_iterations - 1)
+    c1: float = 1.49       # cognitive (personal best) acceleration
+    c2: float = 1.49       # social (global best) acceleration
     seed: int = 0
     # Scenarios to evaluate each candidate against (names must match keys in
     # ags.optimization.fitness.NAMED_SCENARIOS)

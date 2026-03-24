@@ -221,7 +221,8 @@ class TestPSOConfig:
 
     def test_inertia_weight_in_reasonable_range(self):
         cfg = PSOConfig()
-        assert 0.0 < cfg.w < 1.5
+        assert 0.0 < cfg.w_start <= 1.0
+        assert 0.0 < cfg.w_end < cfg.w_start  # end must be lower (exploitation < exploration)
 
     def test_acceleration_coefficients_positive(self):
         cfg = PSOConfig()
