@@ -862,6 +862,11 @@ with st.sidebar:
         # Dummy variables so downstream code that reads scenario_a/b names won't crash
         scenario_a_name = "Baseline Meal"
         scenario_b_name = "Baseline Meal"
+    elif dashboard_mode == "Clinical Review":
+        # Clinical Review runs its own scenario list — no a/b selection needed.
+        # Dummy values prevent NameError in shared downstream code.
+        scenario_a_name = "Baseline Meal"
+        scenario_b_name = "Baseline Meal"
     else:  # Retrospective Replay
         retro_source = st.radio(
             "CGM data source",
