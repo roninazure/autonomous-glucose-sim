@@ -1235,7 +1235,7 @@ if run_button:
             annotation=dict(
                 text="Severe hyperglycemia — 250 mg/dL",
                 font=dict(color=RED, size=9, family="Inter"),
-                xanchor="left", x=0.01, xref="paper",
+                xanchor="left", x=0.01,
                 bgcolor="rgba(248,250,252,0.85)",
             ),
         )
@@ -1245,7 +1245,7 @@ if run_button:
             annotation=dict(
                 text="Hyperglycemia threshold — 180 mg/dL",
                 font=dict(color=AMBER, size=9, family="Inter"),
-                xanchor="left", x=0.01, xref="paper",
+                xanchor="left", x=0.01,
                 bgcolor="rgba(248,250,252,0.85)",
             ),
         )
@@ -1255,7 +1255,7 @@ if run_button:
             annotation=dict(
                 text="Hypoglycemia threshold — 70 mg/dL",
                 font=dict(color=RED, size=9, family="Inter"),
-                xanchor="left", x=0.01, xref="paper",
+                xanchor="left", x=0.01,
                 bgcolor="rgba(248,250,252,0.85)",
             ),
         )
