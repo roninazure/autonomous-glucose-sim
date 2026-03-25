@@ -65,6 +65,10 @@ class ExcursionSignal:
     rate_mgdl_per_min: float   # glucose_delta / step_minutes
     rising: bool
     falling: bool
+    # Second derivative of glucose in mg/dL/min².
+    # Positive = accelerating upward (rising faster); negative = decelerating.
+    # Requires at least 3 readings in glucose_history; 0.0 when unavailable.
+    acceleration_mgdl_per_min2: float = 0.0
 
 
 @dataclass

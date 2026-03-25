@@ -21,7 +21,7 @@ def main() -> None:
 
     snapshots = run_simulation(
         inputs=inputs,
-        duration_minutes=180,
+        duration_minutes=240,
         step_minutes=5,
         seed=42,
     )

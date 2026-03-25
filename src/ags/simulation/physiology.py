@@ -29,6 +29,8 @@ def advance_physiology(
     """
     next_time = snapshot.timestamp_min + step_minutes
 
+    peak_minutes = inputs.effective_peak_minutes()
+
     # Carbs appearing in blood this step via gamma(2, τ) gut absorption.
     active_meal_carbs = compute_active_meal_carbs_g(
         current_time_min=next_time,
@@ -42,7 +44,7 @@ def advance_physiology(
     insulin_effect = insulin_glucose_effect_mgdl(
         x2=snapshot.insulin_compartment2_u,
         step_minutes=step_minutes,
-        peak_minutes=inputs.insulin_peak_minutes,
+        peak_minutes=peak_minutes,
         insulin_sensitivity_mgdl_per_unit=inputs.insulin_sensitivity_mgdl_per_unit,
     )
 
@@ -59,7 +61,7 @@ def advance_physiology(
         x2=snapshot.insulin_compartment2_u,
         dose_u=delivered_dose_u,
         step_minutes=step_minutes,
-        peak_minutes=inputs.insulin_peak_minutes,
+        peak_minutes=peak_minutes,
     )
 
     return SimulationSnapshot(

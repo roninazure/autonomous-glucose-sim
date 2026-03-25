@@ -94,26 +94,53 @@ def _refine_isf_from_observations(
     return round(0.6 * base_isf + 0.4 * observed_isf, 1)
 
 
-def _ror_to_microbolus_fraction(rate_mgdl_per_min: float) -> float:
-    """Map rate of rise to a micro-bolus fraction (doctor's tiered thresholds).
+def _compute_microbolus_fraction(
+    rate_mgdl_per_min: float,
+    acceleration_mgdl_per_min2: float = 0.0,
+) -> float:
+    """Compute micro-bolus delivery fraction from rate of rise and acceleration.
 
-    Typical post-prandial rise on 30g carbs runs ~1–2 mg/dL/min; an
-    aggressive spike after a large meal or missed dose can reach 3+.
+    δ is not a patient parameter — it is derived algorithmically from two
+    CGM-derived signals:
+      • Rate of rise (ROR): how fast glucose is rising right now.
+      • Acceleration: whether the spike is still building (positive) or
+        peaking and rolling over (negative).
 
-    Tiers:
-        < 1.0  mg/dL/min — flat / noise → no micro-bolus pressure (0.0)
-        1–2    mg/dL/min — moderate rise → 0.25 of full correction
-        2–3    mg/dL/min — rapid rise    → 0.50 of full correction
-        ≥ 3.0  mg/dL/min — aggressive   → 1.0  (full correction)
+    Base tiers from ROR (mg/dL/min):
+        < 1.0  — flat / noise → no micro-bolus (0.0)
+        1–2    — moderate rise → 0.25
+        2–3    — rapid rise    → 0.50
+        ≥ 3.0  — aggressive   → 1.0
+
+    Acceleration modifier:
+        > +0.05 mg/dL/min² (still accelerating) → ×1.25  (spike building, act early)
+        < −0.05 mg/dL/min² (decelerating)       → ×0.75  (peak passing, let it roll)
+        otherwise                                → ×1.0   (no adjustment)
+
+    Final value is clamped to [0.0, 1.0].
     """
     if rate_mgdl_per_min < 1.0:
-        return 0.0
+        base = 0.0
     elif rate_mgdl_per_min < 2.0:
-        return 0.25
+        base = 0.25
     elif rate_mgdl_per_min < 3.0:
-        return 0.50
+        base = 0.50
     else:
-        return 1.0
+        base = 1.0
+
+    if acceleration_mgdl_per_min2 > 0.05:
+        modifier = 1.25   # spike still building — be more aggressive
+    elif acceleration_mgdl_per_min2 < -0.05:
+        modifier = 0.75   # deceleration — peak passing, avoid over-stacking
+    else:
+        modifier = 1.0
+
+    return min(1.0, base * modifier)
+
+
+def _ror_to_microbolus_fraction(rate_mgdl_per_min: float) -> float:
+    """Legacy wrapper — ROR-only fraction (no acceleration context)."""
+    return _compute_microbolus_fraction(rate_mgdl_per_min, acceleration_mgdl_per_min2=0.0)
 
 
 def _prebolus_units(estimated_carbs_g: float, effective_isf: float) -> float:
@@ -245,13 +272,22 @@ def recommend_correction(
 
     full_correction = max(0.0, excursion_above_target / effective_isf)
 
-    # Determine micro-bolus fraction — either dynamic (RoR-tiered) or fixed.
+    # Determine micro-bolus fraction (δ) — derived from ROR + acceleration.
+    # No patient parameter: the algorithm reads both signals from CGM history.
     if inputs.autonomous_isf and signal is not None:
-        fraction = _ror_to_microbolus_fraction(signal.rate_mgdl_per_min)
-        tier_label = f"RoR-tiered {signal.rate_mgdl_per_min:+.1f} mg/dL/min → {fraction:.0%}"
+        accel = signal.acceleration_mgdl_per_min2
+        fraction = _compute_microbolus_fraction(signal.rate_mgdl_per_min, accel)
+        tier_label = (
+            f"RoR {signal.rate_mgdl_per_min:+.1f} mg/dL/min "
+            f"accel {accel:+.3f} mg/dL/min² → δ={fraction:.0%}"
+        )
     elif inputs.ror_tiered_microbolus and signal is not None:
-        fraction = _ror_to_microbolus_fraction(signal.rate_mgdl_per_min)
-        tier_label = f"RoR-tiered {signal.rate_mgdl_per_min:+.1f} mg/dL/min → {fraction:.0%}"
+        accel = signal.acceleration_mgdl_per_min2
+        fraction = _compute_microbolus_fraction(signal.rate_mgdl_per_min, accel)
+        tier_label = (
+            f"RoR {signal.rate_mgdl_per_min:+.1f} mg/dL/min "
+            f"accel {accel:+.3f} mg/dL/min² → δ={fraction:.0%}"
+        )
     else:
         fraction = inputs.microbolus_fraction
         tier_label = None
