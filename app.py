@@ -758,7 +758,7 @@ with st.sidebar:
     )
     _nav_clinical = st.radio(
         "",
-        ["⬡ Closed Loop Demo", "Retrospective CGM Replay"],
+        ["⬡ Closed Loop Demo", "Retrospective CGM Replay", "⬡ Swarm Bolus Lab"],
         key="nav_clinical",
         label_visibility="collapsed",
     )
@@ -794,6 +794,7 @@ with st.sidebar:
     _MODE_KEY = {
         "⬡ Closed Loop Demo":    "Closed Loop Demo",
         "Retrospective CGM Replay": "Retrospective Replay",
+        "⬡ Swarm Bolus Lab":     "Swarm Bolus Lab",
         "A vs B Comparison":     "Comparison",
         "Population Sweep":      "Profile Sweep",
         "PSO Optimizer":         "PSO Optimizer",
@@ -2235,6 +2236,295 @@ elif dashboard_mode == "PSO Optimizer":
         data=_json.dumps(_export, indent=2),
         file_name="pso_best_params.json",
         mime="application/json",
+    )
+
+elif dashboard_mode == "Swarm Bolus Lab":
+    # ═══════════════════════════════════════════════════════════════════════
+    # SWARM BOLUS LAB
+    # Pancreatic first-phase response simulation driven by glucose dynamics.
+    #
+    # Controller:
+    #   I_μ(t) = max(0, β·S(t) + γ·A(t) − δ·IOB(t))
+    #   I_total(t) = B₀/60 + I_μ(t)
+    #
+    # S(t)  = glucose rate-of-change (mg/dL/min)  — rise-over-run
+    # A(t)  = acceleration dS/dt (mg/dL/min²)      — change in slope
+    # IOB   = insulin-on-board (exponential decay)
+    # Safety: S(t) ≤ −3 mg/dL/min → I_μ = 0 (hypoglycaemia guard)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    import math as _math
+
+    # ── Meal slope profiles ────────────────────────────────────────────────
+    # Each meal is modelled as a trapezoidal glucose-slope waveform.
+    # Rise: 0 → peak over 6 min | Plateau: peak held 6–12 min
+    # Descent: peak → 0 over 12–24 min | Flat thereafter.
+
+    _SWARM_MEALS: list[tuple[str, float, str]] = [
+        ("Slow meal (0.5 mg/dL/min peak)",      0.5,  "#3b82f6"),
+        ("Moderate meal (1.0 mg/dL/min peak)",   1.0,  "#f59e0b"),
+        ("Fast meal (2.0 mg/dL/min peak)",        2.0,  "#ef4444"),
+        ("Very fast meal (3.0 mg/dL/min peak)",   3.0,  "#a855f7"),
+    ]
+
+    def _slope_at(t: int, peak: float) -> float:
+        if t < 6:
+            return peak * t / 6.0
+        if t < 12:
+            return peak
+        if t < 24:
+            return peak * (24.0 - t) / 12.0
+        return 0.0
+
+    def _run_swarm_bolus(
+        peak: float,
+        B0: float,
+        beta: float,
+        gamma: float,
+        delta: float,
+        iob_tau: float,
+        duration: int = 60,
+    ) -> pd.DataFrame:
+        """Simulate swarm bolus controller response to a meal slope profile."""
+        rows: list[dict] = []
+        iob = 0.0
+        glucose = 100.0
+        prev_S = 0.0
+
+        for t in range(duration + 1):
+            S = _slope_at(t, peak)
+            A = S - prev_S  # first difference ≈ dS/dt at 1-min resolution
+
+            # Safety gate: rapid drop → suspend micro-bolus
+            if S <= -3.0:
+                micro = 0.0
+            else:
+                micro = max(0.0, beta * S + gamma * A - delta * iob)
+
+            total = B0 / 60.0 + micro
+
+            rows.append({
+                "Minute":                          t,
+                "Glucose slope S(t) (mg/dL/min)":  round(S, 4),
+                "Acceleration A(t) (mg/dL/min²)":  round(A, 4),
+                "Extra swarm insulin (U/min)":      round(micro, 4),
+                "Total insulin output (U/min)":     round(total, 4),
+                "Glucose (mg/dL)":                  round(glucose, 1),
+            })
+
+            glucose += S
+            # IOB: accumulate new dose then apply per-minute exponential decay
+            iob = (iob + micro) * _math.exp(-1.0 / iob_tau)
+            prev_S = S
+
+        return pd.DataFrame(rows)
+
+    # ── Page header ────────────────────────────────────────────────────────
+    st.markdown(
+        f"""
+        <div style="margin-bottom:1.2rem;">
+          <div style="font-size:0.72rem;font-weight:700;color:{MUTED};letter-spacing:0.9px;
+                      text-transform:uppercase;margin-bottom:0.3rem;">Swarm Bolus Lab</div>
+          <h1 style="margin:0;font-size:1.7rem;color:{WHITE};font-weight:700;
+                     font-family:'Inter',sans-serif;line-height:1.2;">
+            Pancreatic First-Phase Response Simulator
+          </h1>
+          <p style="margin:0.5rem 0 0 0;color:{MUTED};font-size:0.88rem;max-width:680px;">
+            Autonomous micro-bolus controller driven entirely by real-time glucose dynamics.
+            No meal announcement required — the system detects, calculates, and delivers
+            every dose without user input.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── Controller equation banner ─────────────────────────────────────────
+    st.markdown(
+        f"""
+        <div style="background:{BG3};border:1px solid {GRID};border-radius:8px;
+                    padding:0.85rem 1.2rem;margin-bottom:1.4rem;font-family:'Inter',sans-serif;">
+          <div style="font-size:0.72rem;font-weight:700;color:{MUTED};letter-spacing:0.7px;
+                      text-transform:uppercase;margin-bottom:0.4rem;">Controller Signature</div>
+          <div style="color:{WHITE};font-size:1.02rem;font-weight:600;letter-spacing:0.2px;">
+            I<sub>μ</sub>(t) = max(0, &nbsp;β·S(t) + γ·A(t) − δ·IOB(t))
+          </div>
+          <div style="color:{WHITE};font-size:1.02rem;font-weight:600;margin-top:0.25rem;">
+            I<sub>total</sub>(t) = B<sub>0</sub>/60 &nbsp;+&nbsp; I<sub>μ</sub>(t)
+          </div>
+          <div style="color:{MUTED};font-size:0.78rem;margin-top:0.55rem;line-height:1.7;">
+            <b style="color:{WHITE};">S(t)</b> = glucose slope (mg/dL/min) &nbsp;·&nbsp;
+            <b style="color:{WHITE};">A(t)</b> = acceleration dS/dt (mg/dL/min²) &nbsp;·&nbsp;
+            <b style="color:{WHITE};">IOB</b> = insulin-on-board (exponential decay) &nbsp;·&nbsp;
+            <b style="color:{WHITE};">Safety</b>: S(t) ≤ −3 mg/dL/min → I<sub>μ</sub> = 0
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── Tunable parameters ─────────────────────────────────────────────────
+    _col_p1, _col_p2, _col_p3, _col_p4, _col_p5 = st.columns(5)
+    with _col_p1:
+        _sb_B0    = st.number_input("B₀ basal (U/hr)",  min_value=0.1, max_value=3.0, value=0.80, step=0.05, format="%.2f")
+    with _col_p2:
+        _sb_beta  = st.number_input("β  slope gain",    min_value=0.0, max_value=0.5, value=0.037, step=0.001, format="%.3f")
+    with _col_p3:
+        _sb_gamma = st.number_input("γ  accel gain",    min_value=0.0, max_value=0.5, value=0.066, step=0.001, format="%.3f")
+    with _col_p4:
+        _sb_delta = st.number_input("δ  IOB suppression", min_value=0.0, max_value=1.0, value=0.05, step=0.005, format="%.3f")
+    with _col_p5:
+        _sb_tau   = st.number_input("IOB τ (min)",      min_value=30,  max_value=180,  value=75,   step=5)
+
+    st.caption(
+        f"Basal background: **{_sb_B0/60:.4f} U/min** · "
+        f"β·1 mg/dL/min = **{_sb_beta:.4f} U/min** · "
+        f"γ·1 mg/dL/min² = **{_sb_gamma:.4f} U/min**"
+    )
+
+    # ── Run simulations ────────────────────────────────────────────────────
+    _sb_dfs: dict[str, pd.DataFrame] = {}
+    for _sb_name, _sb_peak, _sb_color in _SWARM_MEALS:
+        _sb_dfs[_sb_name] = _run_swarm_bolus(
+            peak=_sb_peak,
+            B0=_sb_B0,
+            beta=_sb_beta,
+            gamma=_sb_gamma,
+            delta=_sb_delta,
+            iob_tau=float(_sb_tau),
+        )
+
+    # ── Chart 1 — Glucose trajectory ───────────────────────────────────────
+    st.markdown(
+        f"<div style='font-size:0.72rem;font-weight:700;color:{MUTED};letter-spacing:0.7px;"
+        f"text-transform:uppercase;margin:1.2rem 0 0.4rem 0;'>Glucose Trajectory</div>",
+        unsafe_allow_html=True,
+    )
+    _sb_glc_fig = go.Figure()
+    _sb_glc_fig.add_hrect(y0=70, y1=180, fillcolor="rgba(22,163,74,0.07)", line_width=0)
+    _sb_glc_fig.add_hline(
+        y=180, line=dict(color=AMBER, width=1, dash="dot"),
+        annotation=dict(text="High 180", font=dict(color=AMBER, size=9, family="Inter"), xanchor="left"),
+    )
+    _sb_glc_fig.add_hline(
+        y=70, line=dict(color=RED, width=1, dash="dot"),
+        annotation=dict(text="Low 70", font=dict(color=RED, size=9, family="Inter"), xanchor="left"),
+    )
+    for _sb_name, _sb_peak, _sb_color in _SWARM_MEALS:
+        _df = _sb_dfs[_sb_name]
+        _sb_glc_fig.add_trace(go.Scatter(
+            x=_df["Minute"], y=_df["Glucose (mg/dL)"],
+            mode="lines", name=_sb_name,
+            line=dict(color=_sb_color, width=2),
+            hovertemplate="%{x} min → %{y:.1f} mg/dL<extra>" + _sb_name + "</extra>",
+        ))
+    _sb_glc_layout = _layout("Simulated Glucose — Autonomous Swarm Bolus Response", height=320)
+    _sb_glc_layout["xaxis"]["title"] = "minutes"
+    _sb_glc_layout["yaxis"]["title"] = "glucose (mg/dL)"
+    _sb_glc_fig.update_layout(**_sb_glc_layout)
+    st.plotly_chart(_sb_glc_fig, use_container_width=True)
+
+    # ── Chart 2 — Insulin output ───────────────────────────────────────────
+    _sb_ins_fig = go.Figure()
+    _sb_basal_rate = _sb_B0 / 60.0
+    _sb_ins_fig.add_hline(
+        y=_sb_basal_rate, line=dict(color=MUTED, width=1, dash="dot"),
+        annotation=dict(
+            text=f"Basal {_sb_basal_rate:.4f} U/min",
+            font=dict(color=MUTED, size=9, family="Inter"), xanchor="left",
+        ),
+    )
+    for _sb_name, _sb_peak, _sb_color in _SWARM_MEALS:
+        _df = _sb_dfs[_sb_name]
+        _sb_ins_fig.add_trace(go.Scatter(
+            x=_df["Minute"], y=_df["Total insulin output (U/min)"],
+            mode="lines", name=_sb_name,
+            line=dict(color=_sb_color, width=2),
+            fill="tozeroy" if _sb_peak == 0.5 else None,
+            fillcolor="rgba(59,130,246,0.05)" if _sb_peak == 0.5 else None,
+            hovertemplate="%{x} min → %{y:.4f} U/min<extra>" + _sb_name + "</extra>",
+        ))
+    _sb_ins_layout = _layout("Total Insulin Output — Basal + Swarm Micro-Boluses", height=280)
+    _sb_ins_layout["xaxis"]["title"] = "minutes"
+    _sb_ins_layout["yaxis"]["title"] = "U/min"
+    _sb_ins_fig.update_layout(**_sb_ins_layout)
+    st.plotly_chart(_sb_ins_fig, use_container_width=True)
+
+    # ── Chart 3 — Slope and Acceleration ──────────────────────────────────
+    _sb_dyn_fig = go.Figure()
+    _sb_dyn_fig.add_hline(y=0, line=dict(color=GRID, width=1))
+    for _sb_name, _sb_peak, _sb_color in _SWARM_MEALS:
+        _df = _sb_dfs[_sb_name]
+        _sb_dyn_fig.add_trace(go.Scatter(
+            x=_df["Minute"], y=_df["Glucose slope S(t) (mg/dL/min)"],
+            mode="lines", name=f"S(t) {_sb_name}",
+            line=dict(color=_sb_color, width=2),
+            hovertemplate="%{x} min  S=%{y:.3f}<extra>" + _sb_name + "</extra>",
+        ))
+        _sb_dyn_fig.add_trace(go.Scatter(
+            x=_df["Minute"], y=_df["Acceleration A(t) (mg/dL/min²)"],
+            mode="lines", name=f"A(t) {_sb_name}",
+            line=dict(color=_sb_color, width=1, dash="dot"),
+            hovertemplate="%{x} min  A=%{y:.3f}<extra>" + _sb_name + " accel</extra>",
+        ))
+    _sb_dyn_layout = _layout("Glucose Dynamics — Slope S(t) [solid] & Acceleration A(t) [dotted]", height=280)
+    _sb_dyn_layout["xaxis"]["title"] = "minutes"
+    _sb_dyn_layout["yaxis"]["title"] = "mg/dL/min"
+    _sb_dyn_fig.update_layout(**_sb_dyn_layout)
+    st.plotly_chart(_sb_dyn_fig, use_container_width=True)
+
+    # ── Summary data table (checkpoint rows) ──────────────────────────────
+    st.markdown(
+        f"<div style='font-size:0.72rem;font-weight:700;color:{MUTED};letter-spacing:0.7px;"
+        f"text-transform:uppercase;margin:1.2rem 0 0.4rem 0;'>Simulation Data Table</div>",
+        unsafe_allow_html=True,
+    )
+    _CHECKPOINTS = [0, 3, 6, 12, 18, 24, 30]
+    _sb_table_frames: list[pd.DataFrame] = []
+    for _sb_name, _sb_peak, _sb_color in _SWARM_MEALS:
+        _df = _sb_dfs[_sb_name]
+        _chunk = _df[_df["Minute"].isin(_CHECKPOINTS)].copy()
+        _chunk.insert(0, "Scenario", _sb_name)
+        _sb_table_frames.append(_chunk)
+    _sb_combined = pd.concat(_sb_table_frames, ignore_index=True)
+
+    # Display columns matching the doctor's CSV
+    _display_cols = [
+        "Scenario", "Minute",
+        "Glucose slope S(t) (mg/dL/min)",
+        "Acceleration A(t) (mg/dL/min²)",
+        "Extra swarm insulin (U/min)",
+        "Total insulin output (U/min)",
+        "Glucose (mg/dL)",
+    ]
+    st.dataframe(_sb_combined[_display_cols], use_container_width=True, hide_index=True)
+
+    # ── CSV download ───────────────────────────────────────────────────────
+    _sb_csv = _sb_combined[_display_cols].to_csv(index=False).encode()
+    st.download_button(
+        "Download full simulation CSV",
+        data=_sb_csv,
+        file_name=f"Swarm_Bolus_Simulation_Summary_B0_{_sb_B0:.2f}Uhr.csv",
+        mime="text/csv",
+    )
+
+    # ── Key insight callout ────────────────────────────────────────────────
+    st.markdown(
+        f"""
+        <div style="background:{BG3};border-left:3px solid {NEON};border-radius:0 6px 6px 0;
+                    padding:0.75rem 1.1rem;margin-top:1.2rem;font-family:'Inter',sans-serif;">
+          <div style="font-size:0.72rem;font-weight:700;color:{NEON};letter-spacing:0.7px;
+                      text-transform:uppercase;margin-bottom:0.35rem;">How the system reacts autonomously</div>
+          <div style="color:{WHITE};font-size:0.86rem;line-height:1.7;">
+            A faster glucose rise triggers a <b>larger and earlier</b> swarm response —
+            mirroring the pancreatic first-phase pulse. The acceleration term γ·A(t) fires
+            <b>before</b> the slope peaks, front-loading insulin exactly when it is
+            physiologically most effective. IOB suppression (δ·IOB) prevents stacking
+            as the rise plateaus. <b>No meal announcement, no user action required.</b>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 else:

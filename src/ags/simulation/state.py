@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ags.simulation.insulin_type import InsulinAnalog
 
 
 @dataclass
@@ -33,4 +37,15 @@ class SimulationInputs:
     meal_events: list[MealEvent] = field(default_factory=list)
     # Peak action time in minutes. 75 ≈ NovoLog/Aspart; 65 ≈ Humalog/Lispro;
     # 55 ≈ Fiasp (ultra-rapid).
+    # Overridden by insulin_analog when set.
     insulin_peak_minutes: float = 75.0
+    # Optional insulin analog selection — when set, its peak_minutes overrides
+    # insulin_peak_minutes above.  Supports Admelog, Apidra, Fiasp, Humalog,
+    # Lyumjev, and Novolog.
+    insulin_analog: "InsulinAnalog | None" = None
+
+    def effective_peak_minutes(self) -> float:
+        """Return peak_minutes for the selected analog, or the raw field."""
+        if self.insulin_analog is not None:
+            return self.insulin_analog.peak_minutes
+        return self.insulin_peak_minutes

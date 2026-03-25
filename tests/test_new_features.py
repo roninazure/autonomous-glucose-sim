@@ -195,7 +195,7 @@ class TestRorTieredMicrobolus:
         rec = recommend_correction(inputs, prediction, signal=signal)
         # Full fraction → (200 - 110) / 50 × 1.0 = 1.8
         assert rec.recommended_units == pytest.approx(1.8, abs=0.01)
-        assert "RoR-tiered" in rec.reason
+        assert "RoR" in rec.reason and "accel" in rec.reason
 
     def test_ror_tiered_flat_rate_delivers_zero(self) -> None:
         """With ror_tiered_microbolus=True, flat rate → 0 units even if glucose above target."""

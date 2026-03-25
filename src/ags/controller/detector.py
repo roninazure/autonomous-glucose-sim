@@ -26,9 +26,19 @@ def detect_excursion(
     step = max(1, inputs.step_minutes)
     rate_mgdl_per_min = glucose_delta / step
 
+    # Compute acceleration (second derivative) when at least 3 readings are
+    # available in glucose_history.  Acceleration > 0 means glucose is rising
+    # faster (spike still building); < 0 means decelerating (peak approaching).
+    acceleration_mgdl_per_min2 = 0.0
+    history = inputs.glucose_history
+    if len(history) >= 3:
+        prev_rate = (history[-2] - history[-3]) / step
+        acceleration_mgdl_per_min2 = (rate_mgdl_per_min - prev_rate) / step
+
     return ExcursionSignal(
         glucose_delta_mgdl=glucose_delta,
         rate_mgdl_per_min=rate_mgdl_per_min,
         rising=rate_mgdl_per_min >= rise_threshold_mgdl_per_min,
         falling=rate_mgdl_per_min <= fall_threshold_mgdl_per_min,
+        acceleration_mgdl_per_min2=acceleration_mgdl_per_min2,
     )
