@@ -55,9 +55,13 @@ def evaluate_safety_stateful(
     )
 
     if suspend_state.is_suspended:
+        # Use a small epsilon to guard against floating-point boundary issues
+        # where 89.9999999 fails to clear a 90.0 threshold despite being
+        # physiologically equivalent. The margin here is clinically negligible.
+        _RESUME_EPSILON = 0.01  # mg/dL
         can_resume = (
             inputs.trend_confirmed
-            and inputs.predicted_glucose_mgdl >= resume_threshold
+            and inputs.predicted_glucose_mgdl >= resume_threshold - _RESUME_EPSILON
         )
         if can_resume:
             new_state = SuspendState(is_suspended=False, steps_suspended=0, suspend_reason="")

@@ -37,8 +37,14 @@ from ags.detection.state import MealPhase, MealSignal
 
 # ── Tuneable thresholds ───────────────────────────────────────────────────────
 
-# Minimum smoothed rate (mg/dL/min) to consider a rise significant
-_RISE_RATE_THRESHOLD = 0.8
+# Minimum smoothed rate (mg/dL/min) to consider a rise significant.
+# Set conservatively to avoid false positives from sensor noise (noise
+# typically ±0.3 mg/dL/min). Lowered from 0.8 → 0.6 to reliably detect
+# smaller meals (20–30 g carbs) which produce sustained 0.6–0.8 mg/dL/min
+# rises. Pre-bolus under-dosing for small meals is safer than a false
+# positive causing a hypo — the IOB guard and hypo guard remain the
+# final backstops.
+_RISE_RATE_THRESHOLD = 0.6
 
 # Minimum consecutive rising steps before declaring meal onset
 _MIN_CONSECUTIVE_RISING = 2

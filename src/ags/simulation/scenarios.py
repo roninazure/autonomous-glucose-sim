@@ -90,6 +90,72 @@ def missed_bolus_scenario() -> SimulationInputs:
     )
 
 
+def overnight_stability_scenario() -> SimulationInputs:
+    """8-hour overnight stability test — no meal, no drift, standard patient.
+
+    This is the hardest test for autonomous stability: the algorithm must sit
+    quietly for 480 minutes without drifting glucose downward through
+    unnecessary micro-dosing, and without missing any genuine rise.
+
+    Starting glucose: 110 mg/dL (in range).
+    Expected behaviour: algorithm withholds insulin; glucose stays flat.
+    If TIR < 100% or a hypo occurs, the algorithm is over-dosing.
+    """
+    return SimulationInputs(
+        insulin_sensitivity_mgdl_per_unit=50.0,
+        carb_impact_mgdl_per_g=3.0,
+        baseline_drift_mgdl_per_step=0.0,
+        meal_events=[],
+    )
+
+
+def stacked_corrections_scenario() -> SimulationInputs:
+    """Three sequential snacks 60 minutes apart — tests IOB stacking prevention.
+
+    A real patient might snack repeatedly. The IOB guard must prevent the
+    algorithm from stacking corrections across overlapping absorption windows.
+    The risk: each snack individually triggers a correction, but combined IOB
+    from three back-to-back corrections can cause a delayed hypo 2 hours later.
+
+    60-minute spacing gives IOB time to partially clear between snacks, making
+    this a realistic snacking pattern rather than an extreme edge case.
+
+    Expected behaviour: partial IOB-guard throttling on 2nd/3rd snacks; TIR
+    maintained or partially reduced but no hypo from stacking.
+    """
+    return SimulationInputs(
+        insulin_sensitivity_mgdl_per_unit=50.0,
+        carb_impact_mgdl_per_g=3.0,
+        baseline_drift_mgdl_per_step=0.0,
+        meal_events=[
+            MealEvent(timestamp_min=20,  carbs_g=25.0, absorption_minutes=90),
+            MealEvent(timestamp_min=80,  carbs_g=25.0, absorption_minutes=90),
+            MealEvent(timestamp_min=140, carbs_g=25.0, absorption_minutes=90),
+        ],
+    )
+
+
+def rapid_drop_scenario() -> SimulationInputs:
+    """Rapid glucose drop simulating exercise, alcohol, or pump over-delivery.
+
+    Glucose falls at 2.0 mg/dL per 5-min step (~24 mg/dL/hour) — faster
+    than the dawn phenomenon in reverse. Elevated ISF (90) means insulin
+    already on board has greater-than-expected effect.
+
+    The hypo guard and suspension logic must detect the falling trend and
+    lock out all dosing before glucose reaches 70 mg/dL. The stateful
+    suspension must then hold until confirmed recovery.
+
+    This is the scenario most likely to cause patient harm if safety fails.
+    """
+    return SimulationInputs(
+        insulin_sensitivity_mgdl_per_unit=90.0,
+        carb_impact_mgdl_per_g=3.0,
+        baseline_drift_mgdl_per_step=-2.0,  # 24 mg/dL/hour drop
+        meal_events=[],
+    )
+
+
 def late_correction_scenario() -> SimulationInputs:
     """Meal bolus delivered 45 minutes after eating starts.
 
