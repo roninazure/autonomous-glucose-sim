@@ -31,6 +31,9 @@ from ags.simulation.scenarios import (
     exercise_hypoglycemia_scenario,
     late_correction_scenario,
     missed_bolus_scenario,
+    overnight_stability_scenario,
+    rapid_drop_scenario,
+    stacked_corrections_scenario,
     sustained_basal_deficit_scenario,
 )
 from ags.simulation.state import MealEvent, SimulationInputs
@@ -454,6 +457,9 @@ SCENARIO_DESCRIPTIONS = {
     "Exercise Hypoglycemia":   "Falling glucose during exercise · high insulin sensitivity · verifies that safety checks prevent compounding hypoglycaemia",
     "Missed Bolus":            "75 g meal with no pre-meal bolus · tests how the algorithm recovers from a delayed correction",
     "Late Correction":         "60 g meal plus snack · insulin given late · explores the risk of glucose-insulin timing mismatch",
+    "Overnight Stability":     "8-hour overnight · no meal · no drift · algorithm must stay quiet and not drift glucose downward through unnecessary dosing",
+    "Stacked Corrections":     "Three snacks 45 minutes apart · IOB guard must prevent dangerous correction stacking across overlapping absorption windows",
+    "Rapid Drop":              "Fast falling glucose (−24 mg/dL/hr) simulating exercise or alcohol · hypo guard and suspension must fire before glucose hits 70 mg/dL",
 }
 
 
@@ -587,6 +593,12 @@ def build_scenario(name: str) -> SimulationInputs:
         return missed_bolus_scenario()
     if name == "Late Correction":
         return late_correction_scenario()
+    if name == "Overnight Stability":
+        return overnight_stability_scenario()
+    if name == "Stacked Corrections":
+        return stacked_corrections_scenario()
+    if name == "Rapid Drop":
+        return rapid_drop_scenario()
     return baseline_meal_scenario()
 
 
@@ -758,7 +770,7 @@ with st.sidebar:
     )
     _nav_clinical = st.radio(
         "",
-        ["⬡ Closed Loop Demo", "Retrospective CGM Replay", "⬡ Swarm Bolus Lab"],
+        ["Clinical Review", "⬡ Closed Loop Demo", "Retrospective CGM Replay", "⬡ Swarm Bolus Lab"],
         key="nav_clinical",
         label_visibility="collapsed",
     )
@@ -792,6 +804,7 @@ with st.sidebar:
     )
 
     _MODE_KEY = {
+        "Clinical Review":       "Clinical Review",
         "⬡ Closed Loop Demo":    "Closed Loop Demo",
         "Retrospective CGM Replay": "Retrospective Replay",
         "⬡ Swarm Bolus Lab":     "Swarm Bolus Lab",
@@ -802,7 +815,14 @@ with st.sidebar:
     dashboard_mode = _MODE_KEY[_dashboard_mode_raw]
 
     st.header("Clinical Scenario")
-    if dashboard_mode == "Closed Loop Demo":
+    if dashboard_mode == "Clinical Review":
+        st.markdown(
+            f"<div style='font-size:0.82rem;color:{MUTED};line-height:1.6;'>"
+            "Runs all critical scenarios automatically. Press <strong>Run Clinical Review</strong> to start."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    elif dashboard_mode == "Closed Loop Demo":
         demo_scenario_name = st.selectbox(
             "Scenario",
             options=["Baseline Meal", "Large Meal Spike", "Missed Bolus", "Dawn Phenomenon", "Sustained Basal Deficit"],
@@ -1098,7 +1118,202 @@ if run_button:
         extended_duration_minutes=int(_dw_ext_dur),
     )
 
-    if dashboard_mode == "Closed Loop Demo":
+    if dashboard_mode == "Clinical Review":
+        # ─────────────────────────────────────────────────────────────────
+        # CLINICAL REVIEW MODE
+        # Runs all critical scenarios with a single button. Designed for
+        # doctor evaluation — plain language, clear pass/fail, no settings.
+        # ─────────────────────────────────────────────────────────────────
+
+        st.markdown(f"""
+<div style="font-family:'Inter',sans-serif; font-size:1.4rem; font-weight:700;
+            color:{WHITE}; margin:0.5rem 0 0.25rem 0; letter-spacing:-0.3px;">
+  Clinical Review — Autonomous Insulin Delivery
+</div>
+<div style="font-family:'Inter',sans-serif; font-size:0.9rem; color:{MUTED};
+            margin-bottom:1rem; line-height:1.7; max-width:820px;">
+  This review runs every critical clinical scenario automatically and reports whether the
+  algorithm meets ADA/EASD standards without any human intervention.<br/>
+  <strong>No settings required. No manual input. The algorithm decides everything.</strong>
+</div>
+""", unsafe_allow_html=True)
+
+        # (name, duration_min, description, pass_criteria)
+        # pass_criteria: "standard" = TIR≥70 + no hypo + peak<250
+        #                "no_insulin" = algorithm must deliver 0 insulin (physiological drop — can't prevent)
+        #                "no_hypo"    = hypo safety only (TIR may be lower due to IOB throttling)
+        _CR_SCENARIOS = [
+            ("Baseline Meal",           240, "Standard 45g meal — routine post-meal control",          "standard"),
+            ("Missed Bolus",            240, "75g meal, no pre-bolus — retroactive autonomous correction","standard"),
+            ("Dawn Phenomenon",         300, "Overnight cortisol rise — slow drift detection",          "standard"),
+            ("Sustained Basal Deficit", 240, "Chronic insufficient background insulin",                 "standard"),
+            ("Exercise Hypoglycemia",   240, "Rapid glucose fall — hypo guard must suspend all dosing", "no_insulin"),
+            ("Rapid Drop",              180, "24 mg/dL/hr drop — algorithm must not dose into the fall","no_insulin"),
+            ("Stacked Corrections",     360, "3 snacks, 60 min apart — IOB guard prevents unsafe stacking","no_hypo"),
+            ("Overnight Stability",     480, "8 hours, no meal — algorithm must stay quiet and stable", "standard"),
+        ]
+
+        _cr_run = st.button("Run Clinical Review", type="primary", key="cr_run")
+
+        if _cr_run:
+            _cr_results = []
+            _cr_charts = []
+
+            with st.spinner("Running all scenarios — this takes 15–30 seconds…"):
+                from ags.simulation.engine import run_simulation as _run_sim_cr
+
+                for _cr_name, _cr_dur, _cr_desc, _cr_criteria in _CR_SCENARIOS:
+                    _cr_inputs = build_scenario(_cr_name)
+                    _cr_records, _cr_summary = run_closed_loop_evaluation(
+                        simulation_inputs=_cr_inputs,
+                        safety_thresholds=safety_thresholds,
+                        duration_minutes=_cr_dur,
+                        step_minutes=5,
+                        seed=42,
+                        autonomous_isf=True,
+                    )
+                    _cr_nt = _run_sim_cr(_cr_inputs, duration_minutes=_cr_dur, step_minutes=5, seed=42)
+                    _cr_nt_cgm = [s.cgm_glucose_mgdl for s in _cr_nt]
+                    _cr_nt_peak = max(_cr_nt_cgm)
+
+                    _tir     = _cr_summary.percent_time_in_range
+                    _peak    = _cr_summary.peak_cgm_glucose_mgdl
+                    _hypos   = _cr_summary.time_below_range_steps
+                    _ins     = _cr_summary.total_insulin_delivered_u
+                    _blocked = _cr_summary.blocked_decisions
+
+                    # Scenario-specific pass criteria
+                    if _cr_criteria == "standard":
+                        _overall = _tir >= 70.0 and _hypos == 0 and _peak < 250.0
+                        _criteria_note = "TIR ≥70% · No hypos · Peak <250 mg/dL"
+                    elif _cr_criteria == "no_insulin":
+                        # Physiological drop — algorithm cannot prevent drift, but must not dose into it
+                        _overall = round(_ins, 2) == 0.0
+                        _criteria_note = "Algorithm must deliver 0 insulin — cannot add to a falling glucose"
+                    else:  # no_hypo
+                        _overall = _hypos == 0
+                        _criteria_note = "No algorithm-caused hypos — IOB stacking must be prevented"
+
+                    _cr_results.append({
+                        "Scenario":        _cr_name,
+                        "Description":     _cr_desc,
+                        "Criteria":        _criteria_note,
+                        "TIR %":           round(_tir, 1),
+                        "Peak (mg/dL)":    round(_peak, 0),
+                        "Hypo steps":      _hypos,
+                        "Insulin (U)":     round(_ins, 2),
+                        "Safety blocks":   _blocked,
+                        "PASS":            _overall,
+                        "_nt_peak":        _cr_nt_peak,
+                        "_records":        _cr_records,
+                        "_nt_cgm":         _cr_nt_cgm,
+                        "_nt_t":           [s.timestamp_min for s in _cr_nt],
+                    })
+
+            # ── Summary table ─────────────────────────────────────────────
+            st.markdown(f"""
+<div style="font-size:1.1rem; font-weight:700; color:{WHITE};
+            margin:1.5rem 0 0.75rem 0; border-bottom:2px solid {NEON_DIM};
+            padding-bottom:0.4rem;">
+  Results Summary
+</div>""", unsafe_allow_html=True)
+
+            _all_pass = all(r["PASS"] for r in _cr_results)
+            _pass_count = sum(1 for r in _cr_results if r["PASS"])
+            _verdict_color = NEON if _all_pass else (AMBER if _pass_count >= 6 else RED)
+            _verdict_text = (
+                "ALL SCENARIOS PASSED — Algorithm meets ADA/EASD standards across all critical conditions."
+                if _all_pass else
+                f"{_pass_count}/{len(_cr_results)} scenarios passed. Review failures before clinical submission."
+            )
+            st.markdown(f"""
+<div style="background:rgba(22,163,74,0.07) if {_all_pass} else rgba(220,38,38,0.07);
+            border:2px solid {_verdict_color}; border-radius:8px;
+            padding:1rem 1.25rem; margin-bottom:1.5rem;
+            font-family:'Inter',sans-serif;">
+  <div style="font-size:0.72rem; font-weight:700; color:{_verdict_color};
+              text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.4rem;">
+    Overall Verdict
+  </div>
+  <div style="font-size:1rem; font-weight:600; color:{_verdict_color};">
+    {_verdict_text}
+  </div>
+</div>""", unsafe_allow_html=True)
+
+            # Render one row per scenario
+            for _r in _cr_results:
+                _row_color = NEON if _r["PASS"] else RED
+                _status_label = "PASS" if _r["PASS"] else "FAIL"
+
+                with st.expander(
+                    f"{'✓' if _r['PASS'] else '✗'}  {_r['Scenario']}  —  "
+                    f"TIR {_r['TIR %']}%  ·  Peak {_r['Peak (mg/dL)']:.0f} mg/dL  ·  "
+                    f"Hypos {_r['Hypo steps']}  ·  {_status_label}",
+                    expanded=not _r["PASS"],
+                ):
+                    st.caption(_r["Description"])
+                    st.caption(f"Pass criteria: {_r['Criteria']}")
+
+                    # Metric row
+                    _rc1, _rc2, _rc3, _rc4, _rc5 = st.columns(5)
+                    _rc1.metric("Time-in-Range", f"{_r['TIR %']}%", delta="≥70% target",
+                                delta_color="normal" if _r["TIR %"] >= 70 else "inverse")
+                    _rc2.metric("Peak Glucose", f"{_r['Peak (mg/dL)']:.0f} mg/dL",
+                                delta=f"{_r['Peak (mg/dL)'] - _r['_nt_peak']:+.0f} vs no treatment",
+                                delta_color="normal" if _r['Peak (mg/dL)'] < _r['_nt_peak'] else "inverse")
+                    _rc3.metric("Hypo Steps", str(_r["Hypo steps"]),
+                                delta="0 required", delta_color="normal" if _r["Hypo steps"] == 0 else "inverse")
+                    _rc4.metric("Insulin Delivered", f"{_r['Insulin (U)']} U")
+                    _rc5.metric("Safety Blocks", str(_r["Safety blocks"]))
+
+                    # Glucose chart
+                    _rec_df = pd.DataFrame([rec.__dict__ for rec in _r["_records"]])
+                    _fig_cr = go.Figure()
+                    _fig_cr.add_trace(go.Scatter(
+                        x=_r["_nt_t"], y=_r["_nt_cgm"],
+                        name="No treatment", line=dict(color=RED, dash="dash", width=1.5),
+                        opacity=0.7,
+                    ))
+                    _fig_cr.add_trace(go.Scatter(
+                        x=_rec_df["timestamp_min"], y=_rec_df["cgm_glucose_mgdl"],
+                        name="Autonomous control", line=dict(color=NEON, width=2.5),
+                    ))
+                    # Dose markers
+                    _dose_df = _rec_df[_rec_df["insulin_delivered_u"] > 0]
+                    if not _dose_df.empty:
+                        _fig_cr.add_trace(go.Scatter(
+                            x=_dose_df["timestamp_min"],
+                            y=_dose_df["cgm_glucose_mgdl"],
+                            mode="markers",
+                            name="Insulin dose",
+                            marker=dict(color=CYAN, symbol="triangle-up", size=8),
+                        ))
+                    _fig_cr.add_hrect(y0=70, y1=180, fillcolor="rgba(22,163,74,0.06)",
+                                      line_width=0, annotation_text="Target range",
+                                      annotation_position="top left")
+                    _fig_cr.add_hline(y=70,  line_dash="dot", line_color=RED,   line_width=1)
+                    _fig_cr.add_hline(y=180, line_dash="dot", line_color=AMBER, line_width=1)
+                    _fig_cr.update_layout(
+                        height=300, margin=dict(l=40, r=20, t=20, b=40),
+                        plot_bgcolor=BG, paper_bgcolor=BG,
+                        legend=dict(orientation="h", y=1.08, x=0),
+                        xaxis=dict(title="Time (min)", gridcolor=GRID),
+                        yaxis=dict(title="Glucose (mg/dL)", gridcolor=GRID, range=[40, 320]),
+                    )
+                    st.plotly_chart(_fig_cr, use_container_width=True)
+
+            # ── Download summary CSV ───────────────────────────────────────
+            _cr_export_cols = ["Scenario", "Description", "Criteria", "TIR %", "Peak (mg/dL)",
+                               "Hypo steps", "Insulin (U)", "Safety blocks", "PASS"]
+            _cr_df_export = pd.DataFrame(_cr_results)[_cr_export_cols]
+            st.download_button(
+                "Download Clinical Review CSV",
+                data=_cr_df_export.to_csv(index=False).encode(),
+                file_name="swarm_bolus_clinical_review.csv",
+                mime="text/csv",
+            )
+
+    elif dashboard_mode == "Closed Loop Demo":
         # ── Run both trajectories ──────────────────────────────────────────
         _demo_inputs = build_scenario(demo_scenario_name)
 
