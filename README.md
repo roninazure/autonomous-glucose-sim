@@ -48,7 +48,7 @@ The dashboard has two modes:
 
 | Mode | Description |
 |:--|:--|
-| **Clinical Review** | Runs all 8 evaluation scenarios automatically, scores each against ADA/EASD targets (TIR ≥70%, peak <250 mg/dL, 0 hypo steps). One-click verdict table + charts + CSV export. |
+| **Clinical Review** | Runs all 9 evaluation scenarios automatically, scores each against ADA/EASD targets (TIR ≥70%, peak <250 mg/dL, 0 hypo steps). One-click verdict table + charts + CSV export. |
 | **Closed Loop Demo** | **The artificial pancreas loop made visible.** Select a scenario, watch the autonomous controller manage glucose with zero manual input. Glucose trajectory, insulin delivery bars, and full decision log. |
 
 ---
@@ -136,45 +136,35 @@ Every simulation run emits a full clinical-grade metrics payload:
 
 | Metric | Target | Description |
 |:--|:--:|:--|
-| `time_in_range` | **> 70%** | % of readings 70-180 mg/dL (ADA/EASD standard) |
-| `cgm_mean` | 80-140 | Mean sensor glucose across window |
-| `cgm_peak` | < 250 | Maximum excursion — hyperglycemia severity |
-| `time_above_250` | < 1% | Severe hyperglycemia exposure |
-| `glucose_sd` | < 36 | Glycemic variability — lower = more stable |
-| `insulin_recommended` | — | Raw controller output pre-safety |
-| `insulin_delivered` | — | Actual delivery post safety + pump model |
+| `percent_time_in_range` | **≥ 70%** | % of readings 70–180 mg/dL (ADA/EASD standard) |
+| `average_cgm_glucose_mgdl` | 80–140 | Mean sensor glucose across window |
+| `peak_cgm_glucose_mgdl` | < 250 | Maximum excursion — hyperglycemia severity |
+| `time_above_250_steps` | → 0 | Steps in severe hyperglycemia |
+| `glucose_variability_sd_mgdl` | < 36 | Glycemic variability — lower = more stable |
+| `total_recommended_insulin_u` | — | Raw controller output pre-safety |
+| `total_insulin_delivered_u` | — | Actual delivery post safety + pump model |
 | `blocked_decisions` | → 0 | Requests fully rejected by safety layer |
-| `clipped_decisions` | → low | Requests reduced (not blocked) by safety layer |
+| `clipped_decisions` | → 0 | Requests reduced (not blocked) by safety layer |
+| `time_suspended_steps` | → 0 | Steps where pump was suspended due to predicted hypo |
 
 ---
 
 ## Decision Explainability
 
-Every step in every run can be expanded into a full **Decision Timeline** showing what the controller saw and why it acted:
+Every step is logged in the **Controller Decision Log** (expandable in the Closed Loop Demo). Columns per timestep:
 
-```
-┌─ t = 35 min ──────────────────────────────────────────
-  cgm            : 191.0 mg/dL
-  trend           : ↑  +1.60 mg/dL/min
-  predicted +30   : 239.2 mg/dL
-  IOB             : 0.000 U
-├─ controller ──────────────────────────────────────────
-  recommended     : 0.579 U
-  reason          : predicted glucose above target
-├─ safety ──────────────────────────────────────────────
-  gate            : allowed ✓
-  reason          : recommendation allowed
-  status          : allowed
-  final units     : 0.579 U
-├─ delivery ────────────────────────────────────────────
-  delivered       : 0.579 U
-├─ narrative ───────────────────────────────────────────
-  CGM 191 mg/dL (↑ +1.6/min) → pred 239 mg/dL at t+30 —
-  delivered 0.58 U (full recommendation: 0.58 U).
-└──────────────────────────────────────────────────────
-```
+| Column | Description |
+|:--|:--|
+| `t (min)` | Simulation time |
+| `CGM (mg/dL)` | Sensor glucose reading |
+| `Cause` | Autonomous classification: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT |
+| `Recommended (U)` | Raw controller output before safety |
+| `Safety` | Safety gate that fired |
+| `Delivered (U)` | Actual insulin delivered by pump |
+| `IOB (U)` | Insulin on board at this timestep |
+| `Suspended` | Whether pump suspension was active |
 
-Seven named safety gates — colour-coded in the timeline table:
+Seven named safety gates:
 
 | Gate | When it fires |
 |:--|:--|
@@ -243,11 +233,14 @@ PYTHONPATH=src pytest -q
 ```
 src/
 └── ags/
-    ├── simulation/       <- physiology engine · CGM model · scenario runner
+    ├── simulation/       <- physiology engine · CGM sensor model · scenario definitions
     ├── controller/       <- decision engine · insulin recommendation logic
-    ├── safety/           <- hard constraints · IOB tracking · hypo prediction
-    ├── pump/             <- delivery abstraction · rate modeling
-    └── evaluation/       <- metrics · ADA/EASD scoring · clinical report
+    ├── safety/           <- 7-gate hard constraints · IOB tracking · hypo suspension
+    ├── pump/             <- delivery abstraction · dual-wave bolus state machine
+    ├── evaluation/       <- metrics · ADA/EASD scoring · RunSummary
+    ├── detection/        <- meal detection · basal drift detection · cause classifier
+    ├── explainability/   <- DecisionExplanation · gate annotator · narrative generator
+    └── core/             <- startup config · print summary
 
 tests/                    <- 247 tests, all passing
 docs/                     <- quick_reference.md · user_guide.md
@@ -263,7 +256,7 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <details>
 <summary><b>01 · Algorithm Validation ✓</b></summary>
 <br/>
-- 8 evaluation scenarios covering hypo, hyper, drift, exercise, overnight, stacked corrections<br/>
+- 9 evaluation scenarios covering hypo, hyper, drift, exercise, overnight, stacked corrections, late correction<br/>
 - ADA/EASD pass criteria enforced: TIR ≥70%, peak <250 mg/dL, 0 hypo steps<br/>
 - 247 automated tests, all passing<br/>
 - Cause-aware dosing: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT detection + distinct strategies
@@ -281,10 +274,10 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <details>
 <summary><b>03 · Human Factors and Explainability ✓</b></summary>
 <br/>
-- Per-step <code>DecisionExplanation</code> capturing the full controller-safety-pump trace<br/>
-- 7 stable gate identifiers with colour-coded dashboard timeline<br/>
-- Plain-English narrative sentence per step (clinician-readable, no code required)<br/>
-- Step drill-down: any timestep expandable into a full monospace audit card
+- Per-step decision log: CGM, cause, recommended dose, safety gate, delivered dose, IOB, suspension state<br/>
+- 7 stable named safety gates — every intervention is identified and auditable<br/>
+- Cause classification per step: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT<br/>
+- Full decision log exportable as CSV from Clinical Review mode
 </details>
 
 <details>
@@ -292,7 +285,7 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <br/>
 - **Closed-loop demo** with real physiological feedback — delivered insulin changes the glucose trajectory<br/>
 - **Clinical Review** mode: one-click full battery with ADA/EASD verdict table and CSV export<br/>
-- 8 scenarios validated: baseline meal, dawn phenomenon, overnight stability, stacked corrections, rapid drop, exercise, missed bolus, sustained basal deficit
+- 9 scenarios validated: baseline meal, dawn phenomenon, overnight stability, stacked corrections, rapid drop, exercise, missed bolus, late correction, sustained basal deficit
 </details>
 
 <details>
