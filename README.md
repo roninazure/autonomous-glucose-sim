@@ -17,7 +17,7 @@
 ![Boundary](https://img.shields.io/badge/⬡_Boundary-Simulation_Only-ff4d6d?style=flat-square&labelColor=050a06)
 ![Python](https://img.shields.io/badge/Python-3.10+-39ff14?style=flat-square&logo=python&logoColor=39ff14&labelColor=050a06)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-ff4d6d?style=flat-square&logo=streamlit&logoColor=white&labelColor=050a06)
-![Tests](https://img.shields.io/badge/Tests-219_passing-39ff14?style=flat-square&logo=pytest&logoColor=39ff14&labelColor=050a06)
+![Tests](https://img.shields.io/badge/Tests-247_passing-39ff14?style=flat-square&logo=pytest&logoColor=39ff14&labelColor=050a06)
 
 </div>
 
@@ -25,9 +25,9 @@
 
 <div align="center">
 
-*Simulation-first platform for building an autonomous insulin dosing engine.*<br/>
-*1-min CGM loop · dual-wave bolus · RoR-tiered micro-bolus · weight-based ISF*<br/>
-*Iterate on glucose dynamics, decision logic, and safety constraints — in a controlled, non-clinical environment.*
+*Autonomous insulin delivery — CGM → Controller → Safety → Pump → Patient, no human intervention.*<br/>
+*Bergman physiology · 7-gate safety layer · cause-aware dosing · IOB tracking · ADA/EASD clinical metrics*<br/>
+*Validate the algorithm in simulation before deployment into reality.*
 
 </div>
 
@@ -44,14 +44,12 @@
 
 SWARM Bolus is a **closed-loop simulation stack** that mirrors a real AID system architecture exactly — with every component replaceable by its hardware counterpart once pre-clinical validation is complete.
 
-The dashboard offers four evaluation modes:
+The dashboard has two modes:
 
 | Mode | Description |
 |:--|:--|
-| **⬡ Closed Loop Demo** | **The artificial pancreas loop made visible.** Delivered insulin changes the glucose trajectory in real time. Shows no-treatment vs autonomous control side by side — same patient, same meal, zero manual input. |
-| **Comparison** | Side-by-side A vs B: same algorithm, different clinical conditions. Produces comparative metrics and an AI-generated plain-English verdict. |
-| **Profile Sweep** | One scenario across all 4 patient archetypes (standard, insulin-resistant, sensitive, rapid-onset). |
-| **Retrospective Replay** | Load a real CGM trace (or a built-in reference pattern) and replay the controller against it. See what it *would have decided* — without affecting the actual glucose trajectory. |
+| **Clinical Review** | Runs all 8 evaluation scenarios automatically, scores each against ADA/EASD targets (TIR ≥70%, peak <250 mg/dL, 0 hypo steps). One-click verdict table + charts + CSV export. |
+| **Closed Loop Demo** | **The artificial pancreas loop made visible.** Select a scenario, watch the autonomous controller manage glucose with zero manual input. Glucose trajectory, insulin delivery bars, and full decision log. |
 
 ---
 
@@ -71,9 +69,8 @@ The dashboard offers four evaluation modes:
 | **Safety Layer** | IOB tracking, hypo prediction, stateful suspension logic, hard clamps. Blocks or clips unsafe dosing |
 | **Pump Abstraction** | Delivery rate limits, dual-wave (split) bolus state machine, quantisation |
 | **Evaluation Engine** | Clinical metrics, scenario comparison, AI-generated verdict, Streamlit dashboard |
-| **Closed-Loop Runner** | `run_closed_loop_evaluation` — true feedback loop: each pump delivery is fed back into `advance_physiology` so delivered insulin changes subsequent glucose |
-| **Retrospective Engine** | Loads real or reference CGM traces; replays controller with hypothetical IOB accumulation |
-| **Explainability Engine** | Per-step `DecisionExplanation`: gate fired, reason, narrative. Rendered in interactive Decision Timeline |
+| **Closed-Loop Runner** | `run_evaluation` — true feedback loop: each pump delivery is fed back into `advance_physiology` so delivered insulin changes subsequent glucose |
+| **Evaluation Engine** | Clinical metrics, ADA/EASD scoring, per-scenario verdict, Streamlit dashboard |
 
 ---
 
@@ -215,33 +212,10 @@ Every green data point on the chart was produced by the algorithm delivering ins
 | Missed Bolus (75g carbs) | 305+ mg/dL | Controller detects & corrects |
 
 **What the demo screen shows:**
-- Red dashed trace — no treatment; glucose goes where physics takes it
-- Green solid trace — autonomous control; algorithm decides, pump delivers, glucose responds
-- Blue triangles — every autonomous delivery, timestamp and dose
-- Four metric cards — peak glucose delta, time in range %, total insulin
-- Expandable per-step decision table (controller reason, meal phase, IOB)
-
----
-
-## Retrospective Replay
-
-Load a real CGM trace and replay the controller against it:
-
-```bash
-# Built-in reference traces
-#   · Post-prandial Spike — 60g meal, missed bolus (110 → 239 → 134 mg/dL)
-#   · Nocturnal Hypo      — overnight IOB, sensitive (90 → 57 → 78 mg/dL)
-#   · Dawn Phenomenon     — cortisol rise, no meal (105 → 163 mg/dL)
-
-# Custom trace — simple CSV format
-echo "timestamp_min,glucose_mgdl" > my_trace.csv
-# ...add rows...
-# Upload via dashboard or paste into the text area
-```
-
-Supported input formats:
-- **Simple CSV** — `timestamp_min,glucose_mgdl`
-- **Dexcom G6/G7 Clarity export** — auto-detected by header; EGV rows filtered, timestamps converted to relative minutes
+- Glucose trajectory chart — CGM readings across the full simulation window
+- Insulin delivery bars — every autonomous dose, timestamp and amount
+- Four metric cards — TIR %, peak glucose, hypo steps, total insulin
+- Expandable decision log — every step: CGM, cause, recommended, safety gate, delivered, IOB
 
 ---
 
@@ -261,7 +235,7 @@ PYTHONPATH=src python -m ags.simulation.run
 PYTHONPATH=src python -m ags.controller.run
 
 # streamlit dashboard
-streamlit run app.py
+PYTHONPATH=src streamlit run app.py
 
 # test suite
 PYTHONPATH=src pytest -q
@@ -278,14 +252,11 @@ src/
     ├── controller/       <- decision engine · insulin recommendation logic
     ├── safety/           <- hard constraints · IOB tracking · hypo prediction
     ├── pump/             <- delivery abstraction · rate modeling
-    ├── evaluation/       <- metrics · AI verdict · clinical report · profile sweep
-    ├── retrospective/    <- CGM trace loader · reference traces · replay runner
-    └── explainability/   <- DecisionExplanation · gate annotator · narrative generator
+    └── evaluation/       <- metrics · ADA/EASD scoring · clinical report
 
-tests/                    <- 223 tests, all passing
-docs/
-experiments/
-app.py                    <- Streamlit dashboard (Closed Loop Demo · Comparison · Profile Sweep · Retrospective Replay)
+tests/                    <- 247 tests, all passing
+docs/                     <- quick_reference.md · user_guide.md
+app.py                    <- Streamlit dashboard (Clinical Review · Closed Loop Demo)
 ```
 
 ---
@@ -297,10 +268,10 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <details>
 <summary><b>01 · Algorithm Validation ✓</b></summary>
 <br/>
-- Large-scale simulation testing across diverse patient profiles<br/>
-- Edge-case coverage: hypo/hyper extremes, missed meals, pump occlusions<br/>
-- Cross-scenario repeatability and statistical robustness<br/>
-- Profile sweep across 4 patient archetypes (standard, resistant, sensitive, rapid-onset)
+- 8 evaluation scenarios covering hypo, hyper, drift, exercise, overnight, stacked corrections<br/>
+- ADA/EASD pass criteria enforced: TIR ≥70%, peak <250 mg/dL, 0 hypo steps<br/>
+- 247 automated tests, all passing<br/>
+- Cause-aware dosing: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT detection + distinct strategies
 </details>
 
 <details>
@@ -325,10 +296,8 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <summary><b>04 · Clinical Evidence ✓</b></summary>
 <br/>
 - **Closed-loop demo** with real physiological feedback — delivered insulin changes the glucose trajectory<br/>
-- Retrospective replay against real CGM traces (CSV or Dexcom G6/G7 export)<br/>
-- 3 built-in clinical reference patterns: post-prandial spike, nocturnal hypo, dawn phenomenon<br/>
-- Hypothetical IOB accumulation tracking (counterfactual controller audit)<br/>
-- Controlled simulation pilot studies via profile sweep
+- **Clinical Review** mode: one-click full battery with ADA/EASD verdict table and CSV export<br/>
+- 8 scenarios validated: baseline meal, dawn phenomenon, overnight stability, stacked corrections, rapid drop, exercise, missed bolus, sustained basal deficit
 </details>
 
 <details>
