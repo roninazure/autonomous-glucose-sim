@@ -75,6 +75,7 @@ SCENARIOS: dict[str, object] = {
     "Sustained Basal Deficit":sustained_basal_deficit_scenario,
     "Exercise Hypoglycemia":  exercise_hypoglycemia_scenario,
     "Missed Bolus":           missed_bolus_scenario,
+    "Late Correction":        late_correction_scenario,
     "Overnight Stability":    overnight_stability_scenario,
     "Stacked Corrections":    stacked_corrections_scenario,
     "Rapid Drop":             rapid_drop_scenario,
@@ -86,6 +87,7 @@ SCENARIO_DURATIONS: dict[str, int] = {
     "Sustained Basal Deficit": 240,
     "Exercise Hypoglycemia":   120,
     "Missed Bolus":            180,
+    "Late Correction":         180,
     "Overnight Stability":     480,
     "Stacked Corrections":     300,
     "Rapid Drop":              120,
@@ -184,7 +186,7 @@ st.sidebar.markdown("---")
 mode = st.sidebar.radio(
     "Mode",
     ["Clinical Review", "Closed Loop Demo"],
-    help="Clinical Review: full battery of 8 scenarios scored vs ADA targets.\n"
+    help="Clinical Review: full battery of 9 scenarios scored vs ADA targets.\n"
          "Closed Loop Demo: watch one scenario run step-by-step.",
 )
 
