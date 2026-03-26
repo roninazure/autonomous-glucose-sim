@@ -168,8 +168,8 @@
     <path d="M792,64 L800,64 L800,56 L792,56" fill="none" stroke="#00cfff" stroke-width="1.5" opacity="0.5"/>
     <text x="670" y="82" font-size="12" fill="#00cfff" text-anchor="middle" filter="url(#glow)">EVALUATION ENGINE</text>
     <text x="670" y="98" font-size="8.5" fill="#00cfff" opacity="0.55" text-anchor="middle">TIR · SD · peak · time above 250</text>
-    <text x="670" y="110" font-size="8.5" fill="#00cfff" opacity="0.55" text-anchor="middle">scenario A vs B comparison</text>
-    <text x="670" y="126" font-size="8" fill="#00cfff" opacity="0.3" text-anchor="middle">→ AI verdict · Streamlit dashboard</text>
+    <text x="670" y="110" font-size="8.5" fill="#00cfff" opacity="0.55" text-anchor="middle">ADA/EASD scoring · 9 scenarios</text>
+    <text x="670" y="126" font-size="8" fill="#00cfff" opacity="0.3" text-anchor="middle">→ Clinical Review · Closed Loop Demo</text>
     <path d="M540,128 L540,136 L550,136" fill="none" stroke="#00cfff" stroke-width="1.5" opacity="0.5"/>
     <path d="M792,128 L800,128 L800,136 L792,136" fill="none" stroke="#00cfff" stroke-width="1.5" opacity="0.5"/>
   </g>

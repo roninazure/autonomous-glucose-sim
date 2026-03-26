@@ -95,7 +95,7 @@
     <text x="430" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
   </g>
 
-  <!-- Card 6: Retro Replay COMPLETE (was EVAL ENGINE IN PROGRESS) -->
+  <!-- Card 6: Clinical Review COMPLETE -->
   <g class="fade-n d6">
     <rect x="483" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
     <rect x="483" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
@@ -103,8 +103,8 @@
     <circle class="blink-g" cx="526" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
     <text x="526" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
     <line x1="496" y1="116" x2="556" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
-    <text x="526" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">RETRO</text>
-    <text x="526" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">REPLAY</text>
+    <text x="526" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">CLINICAL</text>
+    <text x="526" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">REVIEW</text>
     <text x="526" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
   </g>
 
