@@ -68,18 +68,17 @@ The dashboard has two modes:
 | **Controller** | Rule-based + ML-ready decision engine. Recommends bolus / basal adjustments. RoR-tiered micro-bolus. |
 | **Safety Layer** | IOB tracking, hypo prediction, stateful suspension logic, hard clamps. Blocks or clips unsafe dosing |
 | **Pump Abstraction** | Delivery rate limits, dual-wave (split) bolus state machine, quantisation |
-| **Evaluation Engine** | Clinical metrics, scenario comparison, AI-generated verdict, Streamlit dashboard |
-| **Closed-Loop Runner** | `run_evaluation` — true feedback loop: each pump delivery is fed back into `advance_physiology` so delivered insulin changes subsequent glucose |
 | **Evaluation Engine** | Clinical metrics, ADA/EASD scoring, per-scenario verdict, Streamlit dashboard |
+| **Closed-Loop Runner** | `run_evaluation` — true feedback loop: each pump delivery is fed back into `advance_physiology` so delivered insulin changes subsequent glucose |
 
 ---
 
 ## Algorithm Innovations
 
-Four clinically-motivated features added per physician specification:
+Seven algorithm innovations, each clinically motivated:
 
-### 1 · 1-Minute CGM Loop (FreeStyle Libre Cadence)
-The controller loop now supports **1-minute timesteps**, matching the FreeStyle Libre's native 60-second sampling rate. All detection thresholds are expressed in **mg/dL/min** (not per-step counts), so behaviour is consistent regardless of whether the loop runs at 1-min or 5-min intervals. Set `Timestep = 1 min` in the sidebar.
+### 1 · 5-Minute CGM Loop
+The controller runs at **5-minute timesteps**, matching standard CGM cadence. All detection thresholds are expressed in **mg/dL/min** so behaviour is physiologically consistent.
 
 ### 2 · Dual-Wave (Split) Bolus
 Mimics a **combo/dual-wave bolus** as used on insulin pumps today. Instead of one atomic dose, a correction is split into:
@@ -88,10 +87,8 @@ Mimics a **combo/dual-wave bolus** as used on insulin pumps today. Instead of on
 
 *Doctor's example: 30g carbs → 6U total → 2U quick + 4U slowly.*
 
-Configure in sidebar: **Dual-Wave Bolus → Enable**, then set immediate fraction and extended duration.
-
 ### 3 · Rate-of-Rise Tiered Micro-Bolus
-The controller scales its micro-bolus fraction **dynamically based on the observed rate of rise** (mg/dL/min), rather than using a fixed fraction. Tiers:
+The controller scales its micro-bolus fraction **dynamically based on the observed rate of rise** (mg/dL/min):
 
 | Rate | Action |
 |:--|:--|
@@ -100,16 +97,14 @@ The controller scales its micro-bolus fraction **dynamically based on the observ
 | 2–3 mg/dL/min | 50% of full correction |
 | ≥ 3.0 mg/dL/min | 100% (aggressive spike — full correction) |
 
-Enable in sidebar: **Controller → RoR-tiered micro-bolus**.
-
 ### 4 · Weight-Based ISF (1700 Rule)
-The Insulin Sensitivity Factor can be **estimated automatically from body weight** using the 1700 Rule:
+The Insulin Sensitivity Factor is estimated from body weight using the 1700 Rule:
 
 ```
 ISF ≈ 1700 ÷ TDD       where  TDD ≈ weight_kg × 0.55
 ```
 
-For a 70 kg patient: TDD ≈ 38.5 U/day → ISF ≈ 44 mg/dL/U. The insulin-to-carb ratio (ICR) is also estimated via the 500 Rule. Enable in sidebar: **Patient → Estimate ISF from weight**.
+For a 70 kg patient: TDD ≈ 38.5 U/day → ISF ≈ 44 mg/dL/U.
 
 ### 5 · Pre-Bolus De-Duplication (Cause-Aware Dosing)
 When a meal is detected at ONSET, the controller fires a **single pre-bolus** that covers the leading edge of carb absorption (~40% of estimated carb impact). Subsequent ONSET steps — which would previously re-fire the pre-bolus on every CGM reading — are suppressed by a persistent state flag that resets only after 20 consecutive minutes of no meal signal. Result: one surgical pre-dose per meal, not a repeated stack.
