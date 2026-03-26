@@ -64,7 +64,7 @@ The dashboard has two modes:
 | Component | Role |
 |:--|:--|
 | **Physiology Engine** | Bergman 3-compartment model. Produces ground-truth glucose from patient params + meal events |
-| **CGM Sensor Model** | Gaussian noise, interstitial lag, calibration drift. Outputs 1-min or 5-min sensor readings |
+| **CGM Sensor Model** | Gaussian noise, interstitial lag, calibration drift. Outputs 5-min sensor readings |
 | **Controller** | Rule-based + ML-ready decision engine. Recommends bolus / basal adjustments. RoR-tiered micro-bolus. |
 | **Safety Layer** | IOB tracking, hypo prediction, stateful suspension logic, hard clamps. Blocks or clips unsafe dosing |
 | **Pump Abstraction** | Delivery rate limits, dual-wave (split) bolus state machine, quantisation |
@@ -164,23 +164,23 @@ Every step is logged in the **Controller Decision Log** (expandable in the Close
 | `IOB (U)` | Insulin on board at this timestep |
 | `Suspended` | Whether pump suspension was active |
 
-Seven named safety gates:
+Seven safety gates — each returns one of three statuses (`blocked`, `clipped`, `allowed`):
 
-| Gate | When it fires |
-|:--|:--|
-| `no_dose` | Controller recommended 0 U (glucose ≤ target) |
-| `trend_confirmation` | Rising trend not yet confirmed over two consecutive steps |
-| `hypo_guard` | Predicted glucose at t+30 < safety threshold |
-| `iob_guard` | Active insulin on board exceeds the stacking limit |
-| `max_interval_cap` | Recommendation clipped to per-interval maximum |
-| `allowed ✓` | Full recommendation passed all gates and was delivered |
-| `SUSPENSION` | Stateful hypo suspension is active (holds until confirmed recovery) |
+| Gate | Status | When it fires |
+|:--|:--|:--|
+| `no_dose` | blocked | Controller recommended 0 U (glucose ≤ target) |
+| `trend_confirmation` | blocked | Rising trend not yet confirmed |
+| `hypo_guard` | blocked | Predicted glucose below safety threshold |
+| `iob_guard` | blocked | Active insulin on board exceeds stacking limit |
+| `hypo_suspension` | blocked | Stateful suspension active — holds until glucose confirmed recovered |
+| `max_interval_cap` | clipped | Dose reduced to per-interval maximum |
+| *(pass-through)* | allowed | Recommendation passed all gates, delivered in full |
 
 ---
 
 ## Closed Loop Demo
 
-Select **⬡ Closed Loop Demo** in the dashboard sidebar to see the full artificial pancreas loop:
+Select **Closed Loop Demo** in the dashboard sidebar to see the full artificial pancreas loop:
 
 ```
 CGM reading → controller → safety check → pump delivery
@@ -188,19 +188,14 @@ CGM reading → controller → safety check → pump delivery
   next glucose ← advance_physiology(dose) ←←←←←←
 ```
 
-Every green data point on the chart was produced by the algorithm delivering insulin that **actually suppressed the glucose** — no pre-programming, no manual override.
-
-| Scenario | No treatment | Autonomous control |
-|:--|:--|:--|
-| Baseline Meal (45g carbs) | 247 mg/dL peak | 200 mg/dL · 3.8 U delivered |
-| Dawn Phenomenon (drift) | Unchecked rise | 100% time in range · 0.7 U |
-| Missed Bolus (75g carbs) | 305+ mg/dL | Controller detects & corrects |
+The delivered insulin is fed back into the physiology model — glucose responds to what the algorithm actually gave. No pre-programming, no manual override.
 
 **What the demo screen shows:**
-- Glucose trajectory chart — CGM readings across the full simulation window
-- Insulin delivery bars — every autonomous dose, timestamp and amount
-- Four metric cards — TIR %, peak glucose, hypo steps, total insulin
-- Expandable decision log — every step: CGM, cause, recommended, safety gate, delivered, IOB
+- Verdict banner — PASS / FAIL / SAFE against ADA targets
+- Four metric cards — TIR %, peak glucose (mg/dL), hypo steps, total insulin (U)
+- Glucose trajectory chart — blue CGM line with green target band (70–180 mg/dL)
+- Insulin delivery bar chart — every autonomous dose by timestep
+- Expandable Controller Decision Log — every step: CGM, cause, recommended, safety status, delivered, IOB, suspended
 
 ---
 
@@ -267,7 +262,7 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <br/>
 - Insulin-on-board (IOB) modeling with 2-compartment PK/PD<br/>
 - Stateful predictive hypoglycemia suspension with configurable resume margin<br/>
-- 7 independent safety gates: no-dose, trend confirmation, hypo guard, IOB guard, interval cap, allowed ✓, SUSPENSION<br/>
+- 7 independent safety gates: no-dose, trend confirmation, hypo guard, IOB guard, hypo suspension, interval cap, pass-through<br/>
 - Full auditability of every safety intervention via named gate identifiers
 </details>
 

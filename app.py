@@ -186,7 +186,7 @@ st.sidebar.markdown("---")
 mode = st.sidebar.radio(
     "Mode",
     ["Clinical Review", "Closed Loop Demo"],
-    help="Clinical Review: full battery of 8 scenarios scored vs ADA targets.\n"
+    help="Clinical Review: full battery of 9 scenarios scored vs ADA targets.\n"
          "Closed Loop Demo: watch one scenario run step-by-step.",
 )
 
