@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from typing import Generator
 
-import anthropic
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -192,6 +191,7 @@ def _stream_clinical_summary(results: dict) -> Generator[str, None, None]:
         "stage of evaluation. Plain clinical language, flowing paragraphs, no bullet points."
     )
 
+    import anthropic  # lazy import — only needed when summary button is clicked
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
     with client.messages.stream(
         model="claude-opus-4-6",
