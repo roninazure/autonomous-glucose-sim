@@ -203,14 +203,23 @@ def _get_clinical_summary(results: dict) -> str:
     )
 
     try:
-        import anthropic  # lazy import — only needed when summary button is clicked
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
+        import httpx
+        resp = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-opus-4-6",
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=60,
         )
-        return message.content[0].text
+        resp.raise_for_status()
+        return resp.json()["content"][0]["text"]
     except Exception as exc:
         return f"**Error generating summary:** {exc}"
 
