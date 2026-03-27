@@ -165,7 +165,11 @@ def _insulin_chart(records) -> go.Figure:
 
 def _get_clinical_summary(results: dict) -> str:
     """Call Claude to generate an AI clinical summary of scenario results."""
-    api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+    try:
+        api_key = st.secrets.get("ANTHROPIC_API_KEY")
+    except Exception:
+        api_key = None
+    api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return (
             "**API key not configured.**\n\n"
@@ -306,6 +310,19 @@ if mode == "Clinical Review":
         else:
             st.error("One or more scenarios FAILED. See details below.")
 
+        # ── AI Clinical Summary (placed here so it's visible after button click) ──
+        st.markdown("---")
+        if st.button("Generate AI Clinical Summary", type="primary"):
+            with st.spinner("Calling Claude API…"):
+                summary_text = _get_clinical_summary(results)
+            st.session_state["ai_summary"] = summary_text
+
+        if st.session_state.get("ai_summary"):
+            st.subheader("AI Clinical Summary")
+            st.markdown(st.session_state["ai_summary"])
+
+        st.markdown("---")
+
         # ── Per-scenario expanders ────────────────────────────────────────────
         st.subheader("Scenario Detail")
 
@@ -353,17 +370,6 @@ if mode == "Clinical Review":
             file_name="swarm_bolus_clinical_review.csv",
             mime="text/csv",
         )
-
-        # ── AI Clinical Summary ───────────────────────────────────────────────
-        st.markdown("---")
-        if st.button("Generate AI Clinical Summary", type="primary"):
-            with st.spinner("Generating clinical summary…"):
-                summary_text = _get_clinical_summary(results)
-            st.session_state["ai_summary"] = summary_text
-
-        if st.session_state.get("ai_summary"):
-            st.subheader("AI Clinical Summary")
-            st.markdown(st.session_state["ai_summary"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
