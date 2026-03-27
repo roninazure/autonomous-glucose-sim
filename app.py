@@ -6,6 +6,10 @@ Two modes only:
 """
 from __future__ import annotations
 
+import os
+from typing import Generator
+
+import anthropic
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -161,6 +165,43 @@ def _insulin_chart(records) -> go.Figure:
     return fig
 
 
+def _stream_clinical_summary(results: dict) -> Generator[str, None, None]:
+    """Stream an AI clinical summary of scenario results using Claude."""
+    lines = []
+    for name, (records, summary, hypo_steps) in results.items():
+        tir  = summary.percent_time_in_range
+        peak = summary.peak_cgm_glucose_mgdl
+        ins  = summary.total_insulin_delivered_u
+        label, _ = _verdict(name, tir, peak, hypo_steps)
+        lines.append(
+            f"  - {name}: TIR={tir:.1f}%, peak={peak:.0f} mg/dL, "
+            f"hypo steps={hypo_steps}, insulin={ins:.2f}U — {label}"
+        )
+
+    prompt = (
+        "You are a clinical advisor reviewing autonomous insulin delivery simulation "
+        "results for a physician audience.\n\n"
+        "The SWARM Bolus autonomous controller was tested against 9 clinical scenarios. "
+        "ADA/EASD pass criteria: TIR ≥70%, peak glucose <250 mg/dL, 0 hypoglycemia steps. "
+        "The controller operates without any human intervention — CGM readings feed directly "
+        "into the decision engine, which doses autonomously through a 7-gate safety layer.\n\n"
+        "Results:\n" + "\n".join(lines) + "\n\n"
+        "Write a concise clinical summary (3–4 paragraphs) for a physician reviewing this system. "
+        "Cover: overall ADA/EASD performance, safety profile (hypo prevention, suspension), "
+        "any scenarios of concern, and what these results suggest about readiness for the next "
+        "stage of evaluation. Plain clinical language, flowing paragraphs, no bullet points."
+    )
+
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    with client.messages.stream(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
+
+
 def _run_scenario(name: str, duration_minutes: int | None = None) -> tuple:
     sim_inputs = SCENARIOS[name]()
     dur = duration_minutes or SCENARIO_DURATIONS.get(name, 180)
@@ -274,9 +315,9 @@ if mode == "Clinical Review":
                 c4.metric("Insulin", f"{summary.total_insulin_delivered_u:.2f} U")
 
                 st.plotly_chart(_glucose_chart(records, title="Glucose Trajectory"),
-                                use_container_width=True)
+                                use_container_width=True, key=f"glucose_{name}")
                 st.plotly_chart(_insulin_chart(records),
-                                use_container_width=True)
+                                use_container_width=True, key=f"insulin_{name}")
 
         # ── CSV download ──────────────────────────────────────────────────────
         all_rows = []
@@ -299,6 +340,12 @@ if mode == "Clinical Review":
             file_name="swarm_bolus_clinical_review.csv",
             mime="text/csv",
         )
+
+        # ── AI Clinical Summary ───────────────────────────────────────────────
+        st.markdown("---")
+        if st.button("Generate AI Clinical Summary", type="primary"):
+            st.subheader("AI Clinical Summary")
+            st.write_stream(_stream_clinical_summary(results))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
