@@ -206,7 +206,7 @@ def _get_clinical_summary(results: dict) -> str:
         import json
         import urllib.request
         payload = json.dumps({
-            "model": "claude-opus-4-6",
+            "model": "claude-sonnet-4-20250514",
             "max_tokens": 1024,
             "messages": [{"role": "user", "content": prompt}],
         }).encode()
@@ -222,6 +222,9 @@ def _get_clinical_summary(results: dict) -> str:
         )
         with urllib.request.urlopen(req, timeout=60) as r:
             return json.loads(r.read())["content"][0]["text"]
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode()
+        return f"**Error generating summary (HTTP {exc.code}):** {body}"
     except Exception as exc:
         return f"**Error generating summary:** {exc}"
 
