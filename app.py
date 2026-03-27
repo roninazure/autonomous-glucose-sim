@@ -203,23 +203,25 @@ def _get_clinical_summary(results: dict) -> str:
     )
 
     try:
-        import httpx
-        resp = httpx.post(
+        import json
+        import urllib.request
+        payload = json.dumps({
+            "model": "claude-opus-4-6",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode()
+        req = urllib.request.Request(
             "https://api.anthropic.com/v1/messages",
+            data=payload,
             headers={
                 "x-api-key": api_key,
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             },
-            json={
-                "model": "claude-opus-4-6",
-                "max_tokens": 1024,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=60,
+            method="POST",
         )
-        resp.raise_for_status()
-        return resp.json()["content"][0]["text"]
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())["content"][0]["text"]
     except Exception as exc:
         return f"**Error generating summary:** {exc}"
 
