@@ -165,7 +165,7 @@ def _insulin_chart(records) -> go.Figure:
 
 def _get_clinical_summary(results: dict) -> str:
     """Call Claude to generate an AI clinical summary of scenario results."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return (
             "**API key not configured.**\n\n"
