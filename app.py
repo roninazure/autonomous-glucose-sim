@@ -315,9 +315,9 @@ if mode == "Clinical Review":
                 c4.metric("Insulin", f"{summary.total_insulin_delivered_u:.2f} U")
 
                 st.plotly_chart(_glucose_chart(records, title="Glucose Trajectory"),
-                                use_container_width=True)
+                                use_container_width=True, key=f"glucose_{name}")
                 st.plotly_chart(_insulin_chart(records),
-                                use_container_width=True)
+                                use_container_width=True, key=f"insulin_{name}")
 
         # ── CSV download ──────────────────────────────────────────────────────
         all_rows = []
