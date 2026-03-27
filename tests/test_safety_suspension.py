@@ -27,7 +27,7 @@ def _thresholds() -> SafetyThresholds:
 # ── Suspension entry ─────────────────────────────────────────────────────────
 
 def test_enters_suspension_on_hypo_trigger():
-    decision, state = evaluate_safety_stateful(
+    decision, state, _ = evaluate_safety_stateful(
         inputs=_inputs(predicted=75.0),  # below 80 threshold
         thresholds=_thresholds(),
         suspend_state=SuspendState(),
@@ -40,7 +40,7 @@ def test_enters_suspension_on_hypo_trigger():
 def test_does_not_enter_suspension_for_non_hypo_block():
     """IOB block should not trigger suspension."""
     inputs = _inputs(predicted=120.0, iob=4.0)  # IOB block, not hypo
-    decision, state = evaluate_safety_stateful(
+    decision, state, _ = evaluate_safety_stateful(
         inputs=inputs,
         thresholds=_thresholds(),
         suspend_state=SuspendState(),
@@ -55,7 +55,7 @@ def test_suspension_persists_while_glucose_low():
     """Even if recommendation is 0 (no pressure), suspension holds when glucose still low."""
     active_suspend = SuspendState(is_suspended=True, steps_suspended=1, suspend_reason="hypo")
     # Glucose still below resume threshold (80 + 10 = 90), not rising
-    decision, state = evaluate_safety_stateful(
+    decision, state, _ = evaluate_safety_stateful(
         inputs=_inputs(predicted=82.0, trend=False),
         thresholds=_thresholds(),
         suspend_state=active_suspend,
@@ -68,7 +68,7 @@ def test_suspension_persists_while_glucose_low():
 
 def test_suspension_step_counter_increments():
     state = SuspendState(is_suspended=True, steps_suspended=3, suspend_reason="hypo")
-    _, new_state = evaluate_safety_stateful(
+    _, new_state, _ = evaluate_safety_stateful(
         inputs=_inputs(predicted=75.0, trend=False),
         thresholds=_thresholds(),
         suspend_state=state,
@@ -82,7 +82,7 @@ def test_resumes_when_glucose_recovers_and_rising():
     """Suspension lifts when predicted glucose > threshold + margin AND trend rising."""
     state = SuspendState(is_suspended=True, steps_suspended=3, suspend_reason="hypo")
     # Resume threshold = 80 + 10 = 90; predicted=95 and rising
-    decision, new_state = evaluate_safety_stateful(
+    decision, new_state, _ = evaluate_safety_stateful(
         inputs=_inputs(predicted=95.0, trend=True),
         thresholds=_thresholds(),
         suspend_state=state,
@@ -94,7 +94,7 @@ def test_resumes_when_glucose_recovers_and_rising():
 def test_does_not_resume_if_not_rising():
     """Recovery above threshold but trend not confirmed → stay suspended."""
     state = SuspendState(is_suspended=True, steps_suspended=2, suspend_reason="hypo")
-    _, new_state = evaluate_safety_stateful(
+    _, new_state, _ = evaluate_safety_stateful(
         inputs=_inputs(predicted=95.0, trend=False),  # not rising
         thresholds=_thresholds(),
         suspend_state=state,
@@ -106,7 +106,7 @@ def test_does_not_resume_below_margin():
     """Glucose above threshold but below threshold + margin → stay suspended."""
     state = SuspendState(is_suspended=True, steps_suspended=2, suspend_reason="hypo")
     # threshold=80, margin=10 → resume needs ≥90; predicted=85 is not enough
-    _, new_state = evaluate_safety_stateful(
+    _, new_state, _ = evaluate_safety_stateful(
         inputs=_inputs(predicted=85.0, trend=True),
         thresholds=_thresholds(),
         suspend_state=state,
@@ -119,7 +119,7 @@ def test_does_not_resume_below_margin():
 def test_after_resume_normal_evaluation_resumes():
     """After lifting suspension, the step that triggers resume runs normal evaluation."""
     state = SuspendState(is_suspended=True, steps_suspended=2, suspend_reason="hypo")
-    decision, new_state = evaluate_safety_stateful(
+    decision, new_state, _ = evaluate_safety_stateful(
         inputs=_inputs(predicted=100.0, trend=True, recommended=0.3),
         thresholds=_thresholds(),
         suspend_state=state,
@@ -142,7 +142,7 @@ def test_suspension_across_multiple_steps():
 
     for predicted, rising in zip(glucose_sequence, trends):
         inp = _inputs(predicted=predicted, trend=rising)
-        decision, state = evaluate_safety_stateful(inp, thresholds, state)
+        decision, state, _ = evaluate_safety_stateful(inp, thresholds, state)
         decisions.append(decision.allowed)
 
     # Steps 0-4: all blocked (hypo or suspension)

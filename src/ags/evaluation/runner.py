@@ -10,7 +10,7 @@ from ags.pump.pipeline import run_pump_with_safety_output
 from ags.pump.state import DualWaveConfig, DualWaveState, PumpConfig
 from ags.safety.evaluator import evaluate_safety_stateful
 from ags.safety.integration import build_safety_inputs
-from ags.safety.state import SafetyThresholds, SuspendState
+from ags.safety.state import ArmingState, SafetyThresholds, SuspendState
 from ags.simulation.engine import run_simulation
 from ags.simulation.insulin import advance_insulin_compartments, insulin_on_board
 from ags.simulation.physiology import advance_physiology
@@ -63,6 +63,9 @@ def run_evaluation(
     # Stateful hypo suspension — persists across timesteps until glucose
     # recovers above the resume threshold.
     suspend_state = SuspendState()
+
+    # Arming state — tracks the monitor → armed → firing state machine.
+    arming_state = ArmingState()
 
     # Dual-wave extended tail state — persists across steps.
     dual_wave_state = DualWaveState()
@@ -152,12 +155,14 @@ def run_evaluation(
             prediction=prediction,
             signal=signal,
             insulin_on_board_u=step_iob_u,
+            current_glucose_mgdl=current.cgm_glucose_mgdl,
         )
 
-        safety_decision, suspend_state = evaluate_safety_stateful(
+        safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,
             thresholds=safety_thresholds,
             suspend_state=suspend_state,
+            arming_state=arming_state,
         )
 
         # ── Dual-wave split ───────────────────────────────────────────────
@@ -236,6 +241,7 @@ def run_evaluation(
                 glucose_cause=classification.cause.value if classification else "flat",
                 recommendation_reason=recommendation.reason,
                 isf_observation_count=len(isf_observations),
+                arming_phase=arming_state.phase,
             )
         )
 
@@ -308,6 +314,7 @@ def run_closed_loop_evaluation(
     cgm_history: list[float] = [current.cgm_glucose_mgdl]
 
     suspend_state = SuspendState()
+    arming_state = ArmingState()
 
     # Pre-bolus de-duplication
     meal_prebolus_fired = False
@@ -380,11 +387,13 @@ def run_closed_loop_evaluation(
             prediction=prediction,
             signal=signal,
             insulin_on_board_u=step_iob_u,
+            current_glucose_mgdl=current.cgm_glucose_mgdl,
         )
-        safety_decision, suspend_state = evaluate_safety_stateful(
+        safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,
             thresholds=safety_thresholds,
             suspend_state=suspend_state,
+            arming_state=arming_state,
         )
         pump_result = run_pump_with_safety_output(
             safety_decision=safety_decision,
@@ -418,6 +427,7 @@ def run_closed_loop_evaluation(
             glucose_cause=classification.cause.value if classification else "flat",
             recommendation_reason=recommendation.reason,
             isf_observation_count=len(isf_observations),
+            arming_phase=arming_state.phase,
         ))
 
         # ── THE CLOSED LOOP ───────────────────────────────────────────────────

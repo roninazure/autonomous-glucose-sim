@@ -32,9 +32,9 @@ def test_higher_target_delivers_less_insulin() -> None:
         target_glucose_mgdl=180.0,
     )
 
-    assert summary_tight.total_insulin_delivered_u > summary_loose.total_insulin_delivered_u, (
-        "Lower target should result in more total insulin delivered. "
-        "If this fails, target_glucose_mgdl is not reaching the controller."
+    assert summary_tight.total_recommended_insulin_u > summary_loose.total_recommended_insulin_u, (
+        "Lower target should result in more total insulin recommended by the controller. "
+        "Using recommended (pre-safety) insulin to avoid arming gate timing effects."
     )
 
 

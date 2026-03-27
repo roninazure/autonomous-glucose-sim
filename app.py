@@ -444,6 +444,7 @@ else:
                     "t (min)":          r.timestamp_min,
                     "CGM (mg/dL)":      f"{r.cgm_glucose_mgdl:.1f}",
                     "Cause":            r.glucose_cause,
+                    "Arm Phase":        r.arming_phase,
                     "Recommended (U)":  f"{r.recommended_units:.3f}",
                     "Safety":           r.safety_status,
                     "Delivered (U)":    f"{r.pump_delivered_units:.3f}",
