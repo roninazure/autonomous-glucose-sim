@@ -1,13 +1,12 @@
 """SWARM Bolus — Autonomous Insulin Delivery Simulation.
 
 Two modes only:
-  1. Clinical Review  — run all 8 scenarios, score against ADA targets
+  1. Clinical Review  — run all 9 scenarios, score against ADA targets
   2. Closed Loop Demo — run one scenario, watch the controller in real time
 """
 from __future__ import annotations
 
 import os
-from typing import Generator
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -164,8 +163,16 @@ def _insulin_chart(records) -> go.Figure:
     return fig
 
 
-def _stream_clinical_summary(results: dict) -> Generator[str, None, None]:
-    """Stream an AI clinical summary of scenario results using Claude."""
+def _get_clinical_summary(results: dict) -> str:
+    """Call Claude to generate an AI clinical summary of scenario results."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return (
+            "**API key not configured.**\n\n"
+            "To enable AI clinical summaries, add your Anthropic API key as "
+            "`ANTHROPIC_API_KEY` in Streamlit Cloud → Settings → Secrets."
+        )
+
     lines = []
     for name, (records, summary, hypo_steps) in results.items():
         tir  = summary.percent_time_in_range
@@ -191,15 +198,17 @@ def _stream_clinical_summary(results: dict) -> Generator[str, None, None]:
         "stage of evaluation. Plain clinical language, flowing paragraphs, no bullet points."
     )
 
-    import anthropic  # lazy import — only needed when summary button is clicked
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    with client.messages.stream(
-        model="claude-opus-4-6",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
+    try:
+        import anthropic  # lazy import — only needed when summary button is clicked
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return message.content[0].text
+    except Exception as exc:
+        return f"**Error generating summary:** {exc}"
 
 
 def _run_scenario(name: str, duration_minutes: int | None = None) -> tuple:
@@ -248,7 +257,7 @@ st.markdown("---")
 if mode == "Clinical Review":
     st.header("Clinical Review")
     st.markdown(
-        "Runs all 8 evaluation scenarios against ADA/EASD targets: "
+        "Runs all 9 evaluation scenarios against ADA/EASD targets: "
         "TIR ≥ 70%, peak < 250 mg/dL, 0 hypoglycaemia steps."
     )
 
@@ -264,7 +273,11 @@ if mode == "Clinical Review":
             results[name] = (records, summary, hypo_steps)
 
         progress.empty()
+        st.session_state["clinical_results"] = results
 
+    results = st.session_state.get("clinical_results")
+
+    if results:
         # ── Summary verdict table ─────────────────────────────────────────────
         st.subheader("Summary")
 
@@ -344,8 +357,13 @@ if mode == "Clinical Review":
         # ── AI Clinical Summary ───────────────────────────────────────────────
         st.markdown("---")
         if st.button("Generate AI Clinical Summary", type="primary"):
+            with st.spinner("Generating clinical summary…"):
+                summary_text = _get_clinical_summary(results)
+            st.session_state["ai_summary"] = summary_text
+
+        if st.session_state.get("ai_summary"):
             st.subheader("AI Clinical Summary")
-            st.write_stream(_stream_clinical_summary(results))
+            st.markdown(st.session_state["ai_summary"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
