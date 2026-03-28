@@ -1,12 +1,12 @@
 <div align="center">
 
-![header](assets/header.svg)
+![header](https://roninazure.github.io/autonomous-glucose-sim/assets/header.svg)
 
 </div>
 
 <div align="center">
 
-![Build Status](assets/status.svg)
+![Build Status](https://roninazure.github.io/autonomous-glucose-sim/assets/status.svg)
 
 </div>
 
@@ -57,7 +57,7 @@ The dashboard has two modes:
 
 <div align="center">
 
-![architecture](assets/architecture.svg)
+![architecture](https://roninazure.github.io/autonomous-glucose-sim/assets/architecture.svg)
 
 </div>
 

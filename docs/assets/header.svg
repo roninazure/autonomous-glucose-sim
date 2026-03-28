@@ -1,0 +1,215 @@
+<svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg" width="900" height="280">
+  <defs>
+    <style>
+      text { font-family: 'Share Tech Mono', 'Courier New', monospace; }
+
+      @keyframes draw {
+        to { stroke-dashoffset: 0; }
+      }
+      .cgm-path {
+        stroke-dasharray: 900;
+        stroke-dashoffset: 900;
+        animation: draw 3.5s cubic-bezier(0.4,0,0.2,1) 0.8s forwards;
+      }
+
+      @keyframes pulse {
+        0%   { opacity: 0.7; transform: scale(1); }
+        100% { opacity: 0;   transform: scale(2.8); }
+      }
+      .pulse-ring {
+        animation: pulse 2s ease-out infinite;
+        transform-origin: 856px 144px;
+      }
+
+      @keyframes scan {
+        0%   { transform: translateY(0);     opacity: 0.05; }
+        50%  {                                opacity: 0.02; }
+        100% { transform: translateY(280px); opacity: 0.05; }
+      }
+      .scanline { animation: scan 7s linear infinite; }
+
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      .fi1 { animation: fadeIn 0.5s ease 0.3s both; }
+      .fi2 { animation: fadeIn 0.5s ease 0.7s both; }
+      .fi3 { animation: fadeIn 0.5s ease 1.1s both; }
+      .fi4 { animation: fadeIn 0.5s ease 1.5s both; }
+      .fi5 { animation: fadeIn 0.5s ease 1.9s both; }
+      .fi6 { animation: fadeIn 0.5s ease 2.3s both; }
+
+      @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+      .blink { animation: blink 1.4s step-end infinite; }
+
+      @keyframes flowDot {
+        0%   { stroke-dashoffset: 40; opacity: 0; }
+        10%  { opacity: 0.9; }
+        90%  { opacity: 0.9; }
+        100% { stroke-dashoffset: 0;  opacity: 0; }
+      }
+      .fd1 { stroke-dasharray: 6 34; animation: flowDot 1.8s linear 1.2s infinite; }
+      .fd2 { stroke-dasharray: 6 34; animation: flowDot 1.8s linear 1.8s infinite; }
+      .fd3 { stroke-dasharray: 6 34; animation: flowDot 1.8s linear 2.4s infinite; }
+      .fd4 { stroke-dasharray: 6 34; animation: flowDot 1.8s linear 3.0s infinite; }
+    </style>
+
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0 L0 0 0 40" fill="none" stroke="#39ff14" stroke-width="0.25" opacity="0.12"/>
+    </pattern>
+    <pattern id="finegrid" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M8 0 L0 0 0 8" fill="none" stroke="#39ff14" stroke-width="0.1" opacity="0.05"/>
+    </pattern>
+
+    <radialGradient id="vignette" cx="50%" cy="50%" r="65%">
+      <stop offset="0%"  stop-color="transparent"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.65"/>
+    </radialGradient>
+
+    <marker id="arrowG" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#39ff14" opacity="0.8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="280" fill="#050a06"/>
+  <rect width="900" height="280" fill="url(#grid)"/>
+  <rect width="900" height="280" fill="url(#finegrid)"/>
+  <rect width="900" height="280" fill="url(#vignette)"/>
+  <rect class="scanline" x="0" y="-280" width="900" height="280" fill="#39ff14" opacity="0.05"/>
+
+  <!-- ── Left: Branding ──────────────────────────────────── -->
+  <g class="fi1">
+    <text x="44" y="72" font-size="9" fill="#39ff14" opacity="0.35" letter-spacing="6">SIMULATION · AUTONOMOUS CONTROL</text>
+  </g>
+
+  <g class="fi2" filter="url(#softglow)">
+    <text x="40" y="128" font-size="52" fill="#39ff14" opacity="0.95" font-weight="bold" letter-spacing="-1">SWARM</text>
+  </g>
+  <g class="fi3" filter="url(#softglow)">
+    <text x="40" y="178" font-size="52" fill="#39ff14" opacity="0.95" font-weight="bold" letter-spacing="-1">BOLUS</text>
+  </g>
+
+  <g class="fi4">
+    <text x="44" y="208" font-size="10" fill="#39ff14" opacity="0.45" letter-spacing="3">AUTONOMOUS INSULIN DELIVERY</text>
+  </g>
+
+  <!-- Vertical separator -->
+  <line class="fi5" x1="340" y1="40" x2="340" y2="248" stroke="#39ff14" stroke-width="0.6" opacity="0.2"/>
+
+  <!-- ── Right: CGM chart ──────────────────────────────── -->
+  <rect x="360" y="40" width="500" height="208" rx="3" fill="#39ff14" fill-opacity="0.02" stroke="#39ff14" stroke-width="0.5" opacity="0.25"/>
+
+  <!-- Target band 70-180 (chart: glucose 50-300 over y 48-240, height 192) -->
+  <!-- 70  → y = 240 - (70-50)/250*192  = 225 -->
+  <!-- 180 → y = 240 - (180-50)/250*192 = 140 -->
+  <rect x="360" y="140" width="500" height="85" fill="#39ff14" fill-opacity="0.06"/>
+
+  <!-- Threshold lines -->
+  <line x1="360" y1="225" x2="860" y2="225" stroke="#e74c3c" stroke-width="0.6" stroke-dasharray="4 4" opacity="0.4"/>
+  <line x1="360" y1="140" x2="860" y2="140" stroke="#f39c12" stroke-width="0.6" stroke-dasharray="4 4" opacity="0.3"/>
+  <!-- 250 → y = 240 - (250-50)/250*192 = 86 -->
+  <line x1="360" y1="86"  x2="860" y2="86"  stroke="#e74c3c" stroke-width="0.5" stroke-dasharray="2 6" opacity="0.2"/>
+
+  <!-- Y labels -->
+  <text x="358" y="229" font-size="7.5" fill="#e74c3c" opacity="0.55" text-anchor="end">70</text>
+  <text x="358" y="144" font-size="7.5" fill="#f39c12" opacity="0.45" text-anchor="end">180</text>
+  <text x="358" y="90"  font-size="7.5" fill="#e74c3c" opacity="0.3"  text-anchor="end">250</text>
+
+  <!-- CGM trace: autonomous control — meal spike then correction back to range -->
+  <polyline class="cgm-path"
+    points="
+      360,173
+      376,171
+      392,166
+      408,157
+      424,147
+      440,140
+      456,136
+      472,137
+      488,141
+      504,148
+      520,155
+      536,160
+      552,163
+      568,162
+      584,158
+      600,153
+      616,148
+      632,145
+      648,144
+      664,146
+      680,149
+      696,152
+      712,153
+      728,151
+      744,148
+      760,145
+      776,143
+      792,143
+      808,144
+      824,145
+      840,145
+      856,144
+    "
+    fill="none" stroke="#39ff14" stroke-width="2.2" opacity="0.85" filter="url(#glow)"/>
+
+  <!-- Live dot -->
+  <circle class="blink" cx="856" cy="144" r="4" fill="#39ff14" filter="url(#glow)" opacity="0.9"/>
+  <circle class="pulse-ring" cx="856" cy="144" r="6" fill="none" stroke="#39ff14" stroke-width="1.2"/>
+
+  <!-- Chart header -->
+  <text x="378" y="58" font-size="8" fill="#39ff14" opacity="0.3" letter-spacing="2">AUTONOMOUS GLUCOSE TRAJECTORY</text>
+  <text x="852" y="58" font-size="8" fill="#39ff14" opacity="0.25" text-anchor="end">mg/dL</text>
+
+  <!-- ── Feedback loop strip ────────────────────────────── -->
+  <g class="fi6">
+    <rect x="367" y="252" width="66" height="20" rx="2" fill="#050a06" stroke="#39ff14" stroke-width="0.6" opacity="0.6"/>
+    <text x="400" y="265" font-size="7.5" fill="#39ff14" opacity="0.8" text-anchor="middle" letter-spacing="1">CGM</text>
+
+    <line x1="433" y1="262" x2="447" y2="262" stroke="#39ff14" stroke-width="0.8" opacity="0.5" marker-end="url(#arrowG)"/>
+    <line class="fd1" x1="433" y1="262" x2="447" y2="262" stroke="#39ff14" stroke-width="1.5"/>
+
+    <rect x="450" y="252" width="84" height="20" rx="2" fill="#050a06" stroke="#39ff14" stroke-width="0.6" opacity="0.6"/>
+    <text x="492" y="265" font-size="7.5" fill="#39ff14" opacity="0.8" text-anchor="middle" letter-spacing="1">CONTROLLER</text>
+
+    <line x1="534" y1="262" x2="548" y2="262" stroke="#39ff14" stroke-width="0.8" opacity="0.5" marker-end="url(#arrowG)"/>
+    <line class="fd2" x1="534" y1="262" x2="548" y2="262" stroke="#39ff14" stroke-width="1.5"/>
+
+    <rect x="551" y="252" width="66" height="20" rx="2" fill="#0f0308" stroke="#ff4d6d" stroke-width="0.8" opacity="0.8"/>
+    <text x="584" y="265" font-size="7.5" fill="#ff4d6d" opacity="0.9" text-anchor="middle" letter-spacing="1">SAFETY</text>
+
+    <line x1="617" y1="262" x2="631" y2="262" stroke="#39ff14" stroke-width="0.8" opacity="0.5" marker-end="url(#arrowG)"/>
+    <line class="fd3" x1="617" y1="262" x2="631" y2="262" stroke="#39ff14" stroke-width="1.5"/>
+
+    <rect x="634" y="252" width="56" height="20" rx="2" fill="#050a06" stroke="#39ff14" stroke-width="0.6" opacity="0.6"/>
+    <text x="662" y="265" font-size="7.5" fill="#39ff14" opacity="0.8" text-anchor="middle" letter-spacing="1">PUMP</text>
+
+    <line x1="690" y1="262" x2="704" y2="262" stroke="#39ff14" stroke-width="0.8" opacity="0.5" marker-end="url(#arrowG)"/>
+    <line class="fd4" x1="690" y1="262" x2="704" y2="262" stroke="#39ff14" stroke-width="1.5"/>
+
+    <rect x="707" y="252" width="66" height="20" rx="2" fill="#050a06" stroke="#39ff14" stroke-width="0.6" opacity="0.6"/>
+    <text x="740" y="265" font-size="7.5" fill="#39ff14" opacity="0.8" text-anchor="middle" letter-spacing="1">PATIENT</text>
+
+    <!-- Feedback arc back -->
+    <path d="M773,262 C800,262 800,245 780,238 C760,231 420,231 400,238 C380,245 380,252 367,252"
+          fill="none" stroke="#39ff14" stroke-width="0.6" stroke-dasharray="3 4" opacity="0.25"/>
+  </g>
+
+  <!-- ── Stats ───────────────────────────────────────────── -->
+  <g class="fi5">
+    <line x1="44" y1="232" x2="320" y2="232" stroke="#39ff14" stroke-width="0.4" opacity="0.2"/>
+    <text x="44"  y="248" font-size="8" fill="#39ff14" opacity="0.4" letter-spacing="1">9 SCENARIOS</text>
+    <text x="44"  y="262" font-size="8" fill="#39ff14" opacity="0.3" letter-spacing="1">247 TESTS PASSING</text>
+    <text x="44"  y="276" font-size="8" fill="#39ff14" opacity="0.2" letter-spacing="1">8 SAFETY GATES</text>
+  </g>
+
+  <!-- Disclaimer -->
+  <text x="898" y="276" font-size="7" fill="#39ff14" opacity="0.15" text-anchor="end" letter-spacing="1">SIMULATION ONLY · NO CLINICAL USE</text>
+</svg>
