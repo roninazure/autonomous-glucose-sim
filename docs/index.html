@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>pancri.ai — Autonomous Glucose Control</title>
-  <meta name="description" content="Research-grade simulation platform for autonomous closed-loop insulin delivery. Built for clinicians and researchers." />
+  <meta name="description" content="Research-grade simulation platform for autonomous closed-loop insulin delivery. 9 clinical scenarios, 8-gate safety layer, ADA/EASD scoring. Built for clinicians and researchers." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -570,7 +570,7 @@
   <h1>The <em>artificial pancreas</em><br>you can run in your browser</h1>
   <p class="hero-sub">
     Physics-based glucose–insulin simulation with a full closed-loop controller,
-    six clinical stress scenarios, and clinician-readable safety reports.
+    nine clinical stress scenarios, 8-gate safety layer, and clinician-readable ADA/EASD reports.
     No install. No patient data. Live in seconds.
   </p>
   <div class="cta-group">
@@ -587,19 +587,19 @@
 <div class="stats-strip">
   <div class="stats-inner">
     <div>
-      <div class="stat-value">6</div>
+      <div class="stat-value">9</div>
       <div class="stat-label">Clinical scenarios</div>
     </div>
     <div>
-      <div class="stat-value">240 min</div>
-      <div class="stat-label">Simulation window</div>
+      <div class="stat-value">247</div>
+      <div class="stat-label">Automated tests passing</div>
     </div>
     <div>
       <div class="stat-value">70–180</div>
-      <div class="stat-label">mg/dL target range</div>
+      <div class="stat-label">mg/dL target range (ADA)</div>
     </div>
     <div>
-      <div class="stat-value">3-layer</div>
+      <div class="stat-value">8-gate</div>
       <div class="stat-label">Safety architecture</div>
     </div>
   </div>
@@ -622,7 +622,7 @@
     <div class="card">
       <div class="card-icon">⚙️</div>
       <h3>Closed-loop controller</h3>
-      <p>Basal rate modulation, dual-wave bolus delivery, and correction logic — the full autonomous loop running every simulation tick.</p>
+      <p>Cause-aware dosing: MEAL / BASAL_DRIFT / REBOUND / FLAT detection, dual-wave bolus, rate-of-rise tiered micro-bolus, and online ISF learning — the full autonomous loop every 5 minutes.</p>
     </div>
     <div class="card">
       <div class="card-icon">📊</div>
@@ -631,8 +631,8 @@
     </div>
     <div class="card">
       <div class="card-icon">🔬</div>
-      <h3>Profile sweeps</h3>
-      <p>Run the same scenario across a cohort of simulated patient profiles. Spot systemic risks that single-run testing misses.</p>
+      <h3>3-State Arming Gate</h3>
+      <p>Doctor-specified Gate 0: MONITORING → ARMED → FIRING. Insulin only releases when a genuine excursion is confirmed — not sensor noise or transient spikes.</p>
     </div>
     <div class="card">
       <div class="card-icon">📋</div>
@@ -659,28 +659,28 @@
       <div class="step-num">1</div>
       <div class="step-body">
         <h3>Choose a scenario</h3>
-        <p>Select from six pre-built clinical challenges — or configure your own patient parameters: weight, ISF, carb ratio, basal rate.</p>
+        <p>Select from nine pre-built clinical challenges spanning meals, hypo, basal drift, exercise, overnight, and stacked corrections. Run all nine at once in Clinical Review mode.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">2</div>
       <div class="step-body">
         <h3>Run the simulation</h3>
-        <p>The closed-loop controller runs a 240-minute window. Watch the glucose trace build in real time alongside insulin delivery events.</p>
+        <p>The closed-loop controller runs the full scenario window. Each delivered dose feeds back into the physiology model — glucose responds to what the algorithm actually gave.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-body">
         <h3>Read the report</h3>
-        <p>Time-in-range, hypo/hyper events, bolus accuracy, and safety gate activations — all surfaced in a clinician-readable summary.</p>
+        <p>ADA/EASD-scored verdict (PASS/FAIL/SAFE): time-in-range ≥70%, peak glucose &lt;250 mg/dL, 0 hypo steps. Full clinical metrics: TIR, average CGM, glycemic variability, total insulin delivered.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">4</div>
       <div class="step-body">
-        <h3>Sweep a cohort</h3>
-        <p>Run the same scenario across 10 simulated patient profiles. Export the aggregate CSV for offline analysis.</p>
+        <h3>Inspect every decision</h3>
+        <p>The Controller Decision Log shows every timestep: CGM reading, arming phase, safety gate that fired, recommended dose vs delivered dose, IOB, suspension state. Export to CSV.</p>
       </div>
     </div>
   </div>
@@ -691,32 +691,44 @@
 <!-- SCENARIOS -->
 <section id="scenarios">
   <div class="section-label">Scenarios</div>
-  <h2>Six clinical stress tests</h2>
-  <p class="section-intro">Each scenario is designed to expose a specific failure mode in the control algorithm.</p>
+  <h2>Nine clinical stress tests</h2>
+  <p class="section-intro">Each scenario targets a specific failure mode. All nine are scored automatically against ADA/EASD targets (TIR ≥70%, peak &lt;250 mg/dL, 0 hypo steps).</p>
   <div class="scenario-grid">
     <div class="scenario-pill">
-      <strong>Baseline meal</strong>
-      <span>Standard 60 g carb bolus — sanity-check for time-in-range</span>
+      <strong>Baseline Meal</strong>
+      <span>Standard post-meal glucose management — primary sanity-check for time-in-range</span>
     </div>
     <div class="scenario-pill">
-      <strong>Missed bolus</strong>
-      <span>Meal without pre-bolus — how far does the correction loop recover?</span>
+      <strong>Dawn Phenomenon</strong>
+      <span>Cortisol-driven 3 AM glucose rise with no meal — tests basal drift detection</span>
     </div>
     <div class="scenario-pill">
-      <strong>Dawn phenomenon</strong>
-      <span>3 AM cortisol-driven glucose rise with no meal event</span>
+      <strong>Overnight Stability</strong>
+      <span>Low-stimulation overnight window — verifies the controller stays quiet when glucose is stable</span>
     </div>
     <div class="scenario-pill">
-      <strong>Exercise hypoglycemia</strong>
-      <span>Insulin sensitivity spike mid-activity — clamp test</span>
+      <strong>Stacked Corrections</strong>
+      <span>Repeated dosing pressure — tests the IOB guard against dangerous insulin stacking</span>
     </div>
     <div class="scenario-pill">
-      <strong>Delayed meal bolus recovery</strong>
-      <span>System autonomously detects and recovers from a 90-min missed bolus without human input</span>
+      <strong>Rapid Drop</strong>
+      <span>Aggressive glucose descent — arming gate and hypo suspension clamp delivery immediately</span>
     </div>
     <div class="scenario-pill">
-      <strong>Basal deficit</strong>
-      <span>Under-programmed overnight basal — sustained drift above range</span>
+      <strong>Exercise Hypoglycemia</strong>
+      <span>Insulin sensitivity spike mid-activity — predictive suspension fires before the low</span>
+    </div>
+    <div class="scenario-pill">
+      <strong>Missed Bolus</strong>
+      <span>Meal without pre-bolus — autonomous detection and recovery with no human input</span>
+    </div>
+    <div class="scenario-pill">
+      <strong>Late Correction</strong>
+      <span>Delayed controller response to a post-meal spike — tests recovery timing</span>
+    </div>
+    <div class="scenario-pill">
+      <strong>Sustained Basal Deficit</strong>
+      <span>Slow chronic under-delivery — 0.30 mg/dL/min constant drift triggers basal drift detection</span>
     </div>
   </div>
 </section>
@@ -726,26 +738,26 @@
 <!-- SAFETY -->
 <section id="safety">
   <div class="section-label">Safety</div>
-  <h2>Three layers, no exceptions</h2>
+  <h2>Eight gates, every tick</h2>
   <p class="section-intro">
-    The safety architecture is enforced at every simulation tick. The controller cannot deliver insulin
-    outside these bounds regardless of scenario configuration.
+    Eight independent safety gates run in sequence at every 5-minute CGM step. The controller cannot
+    deliver insulin unless all gates pass. Every gate intervention is named, logged, and auditable.
   </p>
   <div class="safety-cards">
     <div class="safety-card">
-      <div class="safety-badge badge-red">Hard clamps</div>
-      <h3>Absolute limits</h3>
-      <p>Maximum bolus 10 U, maximum basal 3× programmed, glucose floor 60 mg/dL before delivery halts unconditionally.</p>
+      <div class="safety-badge badge-red">Gate 0 — Arming</div>
+      <h3>3-State Arming Gate (doctor-specified)</h3>
+      <p>MONITORING (slope 0.3–0.5) → ARMED (≥0.5 for 5 min) → FIRING (≥0.7 for 10 min or +5 mg/dL cumulative rise). Any drop &gt;3 mg/dL/min or negative slope resets to MONITORING immediately.</p>
     </div>
     <div class="safety-card">
-      <div class="safety-badge badge-amber">IOB accounting</div>
-      <h3>Autonomous dose arbitration</h3>
-      <p>Insulin-on-board tracked continuously. The system automatically calculates and scales every dose — no manual correction ever required.</p>
+      <div class="safety-badge badge-amber">Gates 1–5 — Guards</div>
+      <h3>Hypo suspension + stateless guards</h3>
+      <p>Stateful hypo suspension (holds until glucose recovers above threshold + 10 mg/dL margin and is rising). Trend confirmation, hypoglycemia prediction, and IOB stacking guard run at every step.</p>
     </div>
     <div class="safety-card">
-      <div class="safety-badge badge-green">Rate-of-change guard</div>
-      <h3>Predictive low alert</h3>
-      <p>Rapid drop &gt;2 mg/dL/min suspends basal and flags a predictive low alert before the hypoglycemic event occurs.</p>
+      <div class="safety-badge badge-green">Gates 6–7 — Delivery</div>
+      <h3>Per-interval cap + pass-through</h3>
+      <p>Maximum dose per 5-minute interval enforced. If a recommendation exceeds the cap it is clipped, not blocked. A full pass-through confirms all gates cleared and delivers in full.</p>
     </div>
   </div>
   <div class="research-only">
