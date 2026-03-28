@@ -132,7 +132,7 @@ def run_retrospective(
             insulin_on_board_u=step_iob_u,
         )
 
-        safety_decision, suspend_state = evaluate_safety_stateful(
+        safety_decision, suspend_state, _ = evaluate_safety_stateful(
             inputs=safety_inputs,
             thresholds=safety_thresholds,
             suspend_state=suspend_state,

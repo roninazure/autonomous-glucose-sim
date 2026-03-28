@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from ags.safety.rules import (
+    apply_arming_gate,
     apply_hypoglycemia_guard,
     apply_iob_guard,
     apply_max_interval_cap,
     apply_no_dose_guard,
     apply_trend_confirmation_guard,
 )
-from ags.safety.state import SafetyDecision, SafetyInputs, SafetyThresholds, SuspendState
+from ags.safety.state import (
+    ArmingState,
+    SafetyDecision,
+    SafetyInputs,
+    SafetyThresholds,
+    SuspendState,
+)
 
 
 def evaluate_safety(
@@ -39,36 +46,51 @@ def evaluate_safety_stateful(
     inputs: SafetyInputs,
     thresholds: SafetyThresholds,
     suspend_state: SuspendState,
-) -> tuple[SafetyDecision, SuspendState]:
-    """Stateful safety evaluation with hypo suspend/resume logic.
+    arming_state: ArmingState | None = None,
+) -> tuple[SafetyDecision, SuspendState, ArmingState]:
+    """Stateful safety evaluation with hypo suspend/resume and arming gate.
 
-    Unlike ``evaluate_safety``, this function maintains a suspension across
-    consecutive timesteps.  Once triggered, the suspension holds until:
-      1. Glucose trend is confirmed rising (``trend_confirmed = True``), AND
-      2. Predicted glucose > hypo threshold + ``hypo_resume_margin_mgdl``.
+    Gate order:
+      0. Arming gate (monitor → armed → firing) — when arming_state provided
+      1. Hypo suspension check
+      2–6. Stateless gates: no_dose, trend, hypo_guard, IOB, interval_cap
 
-    This closes the gap where a stateless per-step guard can alternate
-    block/allow/block on consecutive steps while glucose is still falling.
+    Pass ``arming_state=None`` (default) to skip the arming gate entirely —
+    existing unit tests use this path to test suspension in isolation.
+
+    Returns (decision, new_suspend_state, new_arming_state).
     """
+    # ── Gate 0: arming gate (only when caller manages arming state) ───────────
+    # Pass arming_state=None to skip this gate entirely (used by unit tests
+    # that focus on suspension logic in isolation).
+    if arming_state is not None:
+        arming_decision, new_arming = apply_arming_gate(inputs, thresholds, arming_state)
+        if arming_decision is not None:
+            return arming_decision, suspend_state, new_arming
+    else:
+        new_arming = ArmingState(phase="firing")
+
+    # ── Gate 1: hypo suspension check ─────────────────────────────────────────
     resume_threshold = (
         thresholds.min_predicted_glucose_mgdl + thresholds.hypo_resume_margin_mgdl
     )
 
     if suspend_state.is_suspended:
-        # Use a small epsilon to guard against floating-point boundary issues
-        # where 89.9999999 fails to clear a 90.0 threshold despite being
-        # physiologically equivalent. The margin here is clinically negligible.
-        _RESUME_EPSILON = 0.01  # mg/dL
+        _RESUME_EPSILON = 0.01  # mg/dL — guard floating-point boundary
         can_resume = (
             inputs.trend_confirmed
             and inputs.predicted_glucose_mgdl >= resume_threshold - _RESUME_EPSILON
         )
         if can_resume:
-            new_state = SuspendState(is_suspended=False, steps_suspended=0, suspend_reason="")
-            # Resume: run normal stateless evaluation for this step
-            return evaluate_safety(inputs, thresholds), new_state
+            new_suspend = SuspendState(is_suspended=False, steps_suspended=0, suspend_reason="")
+            # On resume, run normal stateless evaluation
+            decision = evaluate_safety(inputs, thresholds)
+            # Reset arming — system must re-confirm rise after hypo recovery
+            resumed_arming = ArmingState(phase="monitoring", steps_in_phase=0,
+                                         baseline_glucose_mgdl=0.0)
+            return decision, new_suspend, resumed_arming
         else:
-            new_state = SuspendState(
+            new_suspend = SuspendState(
                 is_suspended=True,
                 steps_suspended=suspend_state.steps_suspended + 1,
                 suspend_reason=suspend_state.suspend_reason,
@@ -77,20 +99,22 @@ def evaluate_safety_stateful(
                 status="blocked",
                 allowed=False,
                 final_units=0.0,
-                reason=f"hypo suspension active — step {new_state.steps_suspended} "
+                reason=f"hypo suspension active — step {new_suspend.steps_suspended} "
                        f"(resume when predicted ≥ {resume_threshold:.0f} mg/dL and rising)",
-            ), new_state
+            ), new_suspend, new_arming
 
-    # Not suspended — run normal evaluation
+    # ── Gates 2–6: stateless evaluation ───────────────────────────────────────
     decision = evaluate_safety(inputs, thresholds)
 
-    # If the hypo guard blocked delivery, enter suspension
+    # If the hypo guard blocked delivery, enter suspension and reset arming
     if not decision.allowed and "predicted glucose below" in decision.reason:
-        new_state = SuspendState(
+        new_suspend = SuspendState(
             is_suspended=True,
             steps_suspended=1,
             suspend_reason=decision.reason,
         )
-        return decision, new_state
+        reset_arming = ArmingState(phase="monitoring", steps_in_phase=0,
+                                   baseline_glucose_mgdl=0.0)
+        return decision, new_suspend, reset_arming
 
-    return decision, SuspendState(is_suspended=False)
+    return decision, SuspendState(is_suspended=False), new_arming

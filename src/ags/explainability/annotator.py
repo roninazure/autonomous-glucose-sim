@@ -35,7 +35,7 @@ from ags.explainability.state import (
 )
 from ags.safety.evaluator import evaluate_safety_stateful
 from ags.safety.integration import build_safety_inputs
-from ags.safety.state import SafetyThresholds, SuspendState
+from ags.safety.state import ArmingState, SafetyThresholds, SuspendState
 
 _HISTORY_WINDOW = 5
 # Rate-of-rise thresholds in mg/dL/min (detector.py uses per-minute rates).
@@ -83,6 +83,7 @@ def annotate_run(
     # CGM history window — seed with the step before the first record
     cgm_history: list[float] = [seed_glucose_mgdl]
     suspend_state = SuspendState()
+    arming_state = ArmingState()
     explanations: list[DecisionExplanation] = []
 
     previous_glucose = seed_glucose_mgdl
@@ -114,12 +115,14 @@ def annotate_run(
             prediction=prediction,
             signal=signal,
             insulin_on_board_u=iob_u,
+            current_glucose_mgdl=current_glucose,
         )
 
-        safety_decision, suspend_state = evaluate_safety_stateful(
+        safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,
             thresholds=safety_thresholds,
             suspend_state=suspend_state,
+            arming_state=arming_state,
         )
 
         # ── Derive display values ─────────────────────────────────────────

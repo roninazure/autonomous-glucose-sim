@@ -27,7 +27,9 @@ class TimestepRecord:
     basal_drift_type: str = "none"
     basal_drift_rate_mgdl_per_min: float = 0.0
     basal_drift_linearity: float = 0.0
-    glucose_cause: str = "flat"      # GlucoseCause enum value
+    glucose_cause: str = "flat"       # GlucoseCause enum value
+    # Arming gate phase at this timestep ("monitoring" | "armed" | "firing")
+    arming_phase: str = "monitoring"
     # Human-readable reason string from the recommender — useful for debugging
     # and for tracking when the online ISF estimate is influencing decisions.
     recommendation_reason: str = ""
