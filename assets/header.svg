@@ -207,7 +207,7 @@
     <line x1="44" y1="232" x2="320" y2="232" stroke="#39ff14" stroke-width="0.4" opacity="0.2"/>
     <text x="44"  y="248" font-size="8" fill="#39ff14" opacity="0.4" letter-spacing="1">9 SCENARIOS</text>
     <text x="44"  y="262" font-size="8" fill="#39ff14" opacity="0.3" letter-spacing="1">247 TESTS PASSING</text>
-    <text x="44"  y="276" font-size="8" fill="#39ff14" opacity="0.2" letter-spacing="1">7 SAFETY GATES</text>
+    <text x="44"  y="276" font-size="8" fill="#39ff14" opacity="0.2" letter-spacing="1">8 SAFETY GATES</text>
   </g>
 
   <!-- Disclaimer -->
