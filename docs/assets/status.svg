@@ -1,0 +1,153 @@
+<svg viewBox="0 0 860 200" xmlns="http://www.w3.org/2000/svg" width="860" height="200">
+  <defs>
+    <style>
+      text { font-family: 'Share Tech Mono', 'Courier New', monospace; }
+      .blink-g { animation: blinkG 2s ease-in-out infinite; }
+      .blink-a { animation: blinkA 2.5s ease-in-out infinite; }
+      @keyframes blinkG { 0%,100%{opacity:1} 50%{opacity:0.3} }
+      @keyframes blinkA { 0%,100%{opacity:0.8} 50%{opacity:0.2} }
+      .fade-n { animation: fn 0.4s ease both; }
+      @keyframes fn { from{opacity:0} to{opacity:1} }
+      .d1{animation-delay:0.1s} .d2{animation-delay:0.25s} .d3{animation-delay:0.4s}
+      .d4{animation-delay:0.55s} .d5{animation-delay:0.7s} .d6{animation-delay:0.85s}
+      .d7{animation-delay:1.0s} .d8{animation-delay:1.15s} .d9{animation-delay:1.3s}
+    </style>
+    <filter id="g2">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="g3" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M20 0 L0 0 0 20" fill="none" stroke="#39ff14" stroke-width="0.15" opacity="0.08"/>
+    </pattern>
+  </defs>
+
+  <rect width="860" height="200" fill="#050a06"/>
+  <rect width="860" height="200" fill="url(#g3)"/>
+
+  <!-- Header -->
+  <text x="430" y="22" font-size="9" fill="#39ff14" opacity="0.3" text-anchor="middle" letter-spacing="4">BUILD STATUS · SWARM BOLUS</text>
+  <line x1="40" y1="30" x2="820" y2="30" stroke="#39ff14" stroke-width="0.4" opacity="0.15"/>
+
+  <!-- Card W=86, gap=10, 9 cards. Positions: 3, 99, 195, 291, 387, 483, 579, 675, 771 -->
+
+  <!-- Card 1: Arch Design COMPLETE -->
+  <g class="fade-n d1">
+    <rect x="3" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="3" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="46" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="46" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="46" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="16" y1="116" x2="76" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="46" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">ARCH</text>
+    <text x="46" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">DESIGN</text>
+    <text x="46" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
+  </g>
+
+  <!-- Card 2: Sim Engine COMPLETE -->
+  <g class="fade-n d2">
+    <rect x="99" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="99" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="142" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="142" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="142" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="112" y1="116" x2="172" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="142" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">SIM</text>
+    <text x="142" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ENGINE</text>
+    <text x="142" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
+  </g>
+
+  <!-- Card 3: Controller COMPLETE -->
+  <g class="fade-n d3">
+    <rect x="195" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="195" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="238" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="238" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="238" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="208" y1="116" x2="268" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="238" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">CTRL</text>
+    <text x="238" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ENGINE</text>
+    <text x="238" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
+  </g>
+
+  <!-- Card 4: Safety Layer COMPLETE (was IN PROGRESS) -->
+  <g class="fade-n d4">
+    <rect x="291" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="291" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="334" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="334" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="334" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="304" y1="116" x2="364" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="334" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">SAFETY</text>
+    <text x="334" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">LAYER</text>
+    <text x="334" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
+  </g>
+
+  <!-- Card 5: Pump Abstraction COMPLETE (was IN PROGRESS) -->
+  <g class="fade-n d5">
+    <rect x="387" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="387" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="430" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="430" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="430" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="400" y1="116" x2="460" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="430" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">EVAL</text>
+    <text x="430" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ENGINE</text>
+    <text x="430" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
+  </g>
+
+  <!-- Card 6: Clinical Review COMPLETE -->
+  <g class="fade-n d6">
+    <rect x="483" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="483" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="526" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="526" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="526" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="496" y1="116" x2="556" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="526" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">CLINICAL</text>
+    <text x="526" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">REVIEW</text>
+    <text x="526" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
+  </g>
+
+  <!-- Card 7: Explainability COMPLETE (was RISK SCORING ROADMAP) -->
+  <g class="fade-n d7">
+    <rect x="579" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+    <rect x="579" y="44" width="86" height="3" fill="#39ff14" opacity="0.7"/>
+    <circle class="blink-g" cx="622" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="1.5" filter="url(#g2)"/>
+    <circle class="blink-g" cx="622" cy="80" r="4" fill="#39ff14" filter="url(#g2)"/>
+    <text x="622" y="104" font-size="8" fill="#39ff14" opacity="0.9" text-anchor="middle">COMPLETE</text>
+    <line x1="592" y1="116" x2="652" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.2"/>
+    <text x="622" y="132" font-size="8" fill="#39ff14" opacity="0.55" text-anchor="middle">EXPLAIN</text>
+    <text x="622" y="147" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ABILITY</text>
+    <text x="622" y="174" font-size="22" fill="#39ff14" opacity="0.08" text-anchor="middle">✓</text>
+  </g>
+
+  <!-- Card 8: Design History IN PROGRESS (was DATASET VALIDATION ROADMAP) -->
+  <g class="fade-n d8">
+    <rect x="675" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#ffb347" stroke-width="0.8" opacity="0.8"/>
+    <rect x="675" y="44" width="86" height="3" fill="#ffb347" opacity="0.7"/>
+    <circle class="blink-a" cx="718" cy="80" r="8" fill="none" stroke="#ffb347" stroke-width="1.5"/>
+    <circle class="blink-a" cx="718" cy="80" r="4" fill="#ffb347"/>
+    <text x="718" y="104" font-size="7.5" fill="#ffb347" opacity="0.9" text-anchor="middle">IN PROGRESS</text>
+    <line x1="688" y1="116" x2="748" y2="116" stroke="#ffb347" stroke-width="0.3" opacity="0.2"/>
+    <text x="718" y="132" font-size="8" fill="#ffb347" opacity="0.55" text-anchor="middle">REG</text>
+    <text x="718" y="147" font-size="7.5" fill="#ffb347" opacity="0.35" text-anchor="middle">FILING</text>
+    <text x="718" y="174" font-size="22" fill="#ffb347" opacity="0.07" text-anchor="middle">◐</text>
+  </g>
+
+  <!-- Card 9: Clinical Pilot ROADMAP -->
+  <g class="fade-n d9">
+    <rect x="771" y="44" width="86" height="140" rx="3" fill="#050a06" stroke="#39ff14" stroke-width="0.4" opacity="0.4"/>
+    <rect x="771" y="44" width="86" height="3" fill="#39ff14" opacity="0.2"/>
+    <circle cx="814" cy="80" r="8" fill="none" stroke="#39ff14" stroke-width="0.8" opacity="0.3"/>
+    <circle cx="814" cy="80" r="2" fill="#39ff14" opacity="0.3"/>
+    <text x="814" y="104" font-size="7.5" fill="#39ff14" opacity="0.35" text-anchor="middle">ROADMAP</text>
+    <line x1="784" y1="116" x2="844" y2="116" stroke="#39ff14" stroke-width="0.3" opacity="0.1"/>
+    <text x="814" y="132" font-size="8" fill="#39ff14" opacity="0.3" text-anchor="middle">CLINICAL</text>
+    <text x="814" y="147" font-size="7.5" fill="#39ff14" opacity="0.2" text-anchor="middle">PILOT</text>
+    <text x="814" y="174" font-size="22" fill="#39ff14" opacity="0.04" text-anchor="middle">○</text>
+  </g>
+
+  <!-- Bottom -->
+  <line x1="40" y1="190" x2="820" y2="190" stroke="#39ff14" stroke-width="0.3" opacity="0.12"/>
+  <text x="430" y="198" font-size="7" fill="#39ff14" opacity="0.2" text-anchor="middle" letter-spacing="2">● COMPLETE  ◐ IN PROGRESS  ○ ROADMAP</text>
+</svg>
