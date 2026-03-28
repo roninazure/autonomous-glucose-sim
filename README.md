@@ -26,7 +26,7 @@
 <div align="center">
 
 *Autonomous insulin delivery — CGM → Controller → Safety → Pump → Patient, no human intervention.*<br/>
-*Bergman physiology · 7-gate safety layer · cause-aware dosing · IOB tracking · ADA/EASD clinical metrics*<br/>
+*Bergman physiology · 8-gate safety layer · 3-state arming gate · cause-aware dosing · IOB tracking · ADA/EASD clinical metrics*<br/>
 *Validate the algorithm in simulation before deployment into reality.*
 
 </div>
@@ -66,7 +66,7 @@ The dashboard has two modes:
 | **Physiology Engine** | Bergman 3-compartment model. Produces ground-truth glucose from patient params + meal events |
 | **CGM Sensor Model** | Gaussian noise, interstitial lag, calibration drift. Outputs 5-min sensor readings |
 | **Controller** | Rule-based + ML-ready decision engine. Recommends bolus / basal adjustments. RoR-tiered micro-bolus. |
-| **Safety Layer** | IOB tracking, hypo prediction, stateful suspension logic, hard clamps. Blocks or clips unsafe dosing |
+| **Safety Layer** | 3-state arming gate (monitor → armed → firing), IOB tracking, hypo prediction, stateful suspension, hard clamps. 8 gates in series at every step |
 | **Pump Abstraction** | Delivery rate limits, dual-wave (split) bolus state machine, quantisation |
 | **Evaluation Engine** | Clinical metrics, ADA/EASD scoring, per-scenario verdict, Streamlit dashboard |
 | **Closed-Loop Runner** | `run_evaluation` — true feedback loop: each pump delivery is fed back into `advance_physiology` so delivered insulin changes subsequent glucose |
@@ -128,6 +128,20 @@ The longer the system runs with a patient, the more precisely it knows their rea
 ### 7 · Basal Drift Detection (Fixed)
 The basal drift detector uses a 60-minute sliding window and requires ≥6 CGM readings for a reliable R² linearity test. The CGM history window in the runner was previously set to 5 — **one reading short**, meaning drift detection never fired in production. Fixed to 12 readings (matching the detector's full look-back). A new **Sustained Basal Deficit** simulation scenario (0.30 mg/dL/min constant drift, no meal) provides the canonical end-to-end validation path for the `BASAL_DRIFT` detection and correction loop.
 
+### 8 · 3-State Arming Gate (Doctor-Specified)
+Runs as **Gate 0**, before all other safety checks. Ensures the controller only delivers insulin when a genuine glucose excursion is confirmed — not transient sensor noise or a single rising CGM tick.
+
+| Phase | Slope | Duration | Action |
+|:--|:--|:--|:--|
+| **MONITORING** | 0.3–0.5 mg/dL/min | — | Watch only, no dose |
+| **ARMED** | ≥ 0.5 mg/dL/min | 1 step (5 min) | Primed, no dose yet |
+| **FIRING** | ≥ 0.7 mg/dL/min | 2 steps (10 min) **or** cumulative rise ≥ 5 mg/dL | Dose allowed |
+| **HOLD → reset** | < 0.3, any negative slope, or drop > 3 mg/dL/min | any | Return to MONITORING |
+
+Acceleration reversal while FIRING also triggers a HOLD reset. The gate resets to MONITORING on hypo suspension entry and after hypo recovery — the system must re-confirm a genuine rise before dosing again.
+
+The arming phase (`MONITORING` / `ARMED` / `FIRING`) is tracked per-step and visible in the **Arm Phase** column of the Controller Decision Log.
+
 ---
 
 ## Clinical Metrics
@@ -157,6 +171,7 @@ Every step is logged in the **Controller Decision Log** (expandable in the Close
 |:--|:--|
 | `t (min)` | Simulation time |
 | `CGM (mg/dL)` | Sensor glucose reading |
+| `Arm Phase` | Arming gate state: MONITORING / ARMED / FIRING |
 | `Cause` | Autonomous classification: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT |
 | `Recommended (U)` | Raw controller output before safety |
 | `Safety` | Safety gate that fired |
@@ -164,10 +179,11 @@ Every step is logged in the **Controller Decision Log** (expandable in the Close
 | `IOB (U)` | Insulin on board at this timestep |
 | `Suspended` | Whether pump suspension was active |
 
-Seven safety gates — each returns one of three statuses (`blocked`, `clipped`, `allowed`):
+Eight safety gates — each returns one of three statuses (`blocked`, `clipped`, `allowed`):
 
 | Gate | Status | When it fires |
 |:--|:--|:--|
+| `arming_gate` (Gate 0) | blocked | Slope not yet confirmed: MONITORING or ARMED phase |
 | `no_dose` | blocked | Controller recommended 0 U (glucose ≤ target) |
 | `trend_confirmation` | blocked | Rising trend not yet confirmed |
 | `hypo_guard` | blocked | Predicted glucose below safety threshold |
@@ -195,7 +211,7 @@ The delivered insulin is fed back into the physiology model — glucose responds
 - Four metric cards — TIR %, peak glucose (mg/dL), hypo steps, total insulin (U)
 - Glucose trajectory chart — blue CGM line with green target band (70–180 mg/dL)
 - Insulin delivery bar chart — every autonomous dose by timestep
-- Expandable Controller Decision Log — every step: CGM, cause, recommended, safety status, delivered, IOB, suspended
+- Expandable Controller Decision Log — every step: CGM, arm phase, cause, recommended, safety status, delivered, IOB, suspended
 
 ---
 
@@ -230,7 +246,7 @@ src/
 └── ags/
     ├── simulation/       <- physiology engine · CGM sensor model · scenario definitions
     ├── controller/       <- decision engine · insulin recommendation logic
-    ├── safety/           <- 7-gate hard constraints · IOB tracking · hypo suspension
+    ├── safety/           <- 8-gate hard constraints · 3-state arming gate · IOB tracking · hypo suspension
     ├── pump/             <- delivery abstraction · dual-wave bolus state machine
     ├── evaluation/       <- metrics · ADA/EASD scoring · RunSummary
     ├── detection/        <- meal detection · basal drift detection · cause classifier
@@ -251,10 +267,11 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <details>
 <summary><b>01 · Algorithm Validation ✓</b></summary>
 <br/>
-- 9 evaluation scenarios covering hypo, hyper, drift, exercise, overnight, stacked corrections, late correction<br/>
+- 9 evaluation scenarios covering hypo, hyper, drift, exercise, overnight, stacked corrections, late correction, sustained basal deficit<br/>
 - ADA/EASD pass criteria enforced: TIR ≥70%, peak <250 mg/dL, 0 hypo steps<br/>
 - 247 automated tests, all passing<br/>
-- Cause-aware dosing: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT detection + distinct strategies
+- Cause-aware dosing: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT detection + distinct strategies<br/>
+- Doctor-specified 3-state arming gate (monitor → armed → firing) validated across all 9 scenarios
 </details>
 
 <details>
@@ -262,15 +279,15 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <br/>
 - Insulin-on-board (IOB) modeling with 2-compartment PK/PD<br/>
 - Stateful predictive hypoglycemia suspension with configurable resume margin<br/>
-- 7 independent safety gates: no-dose, trend confirmation, hypo guard, IOB guard, hypo suspension, interval cap, pass-through<br/>
+- 8 independent safety gates: arming gate (3-state), no-dose, trend confirmation, hypo guard, IOB guard, hypo suspension, interval cap, pass-through<br/>
 - Full auditability of every safety intervention via named gate identifiers
 </details>
 
 <details>
 <summary><b>03 · Human Factors and Explainability ✓</b></summary>
 <br/>
-- Per-step decision log: CGM, cause, recommended dose, safety gate, delivered dose, IOB, suspension state<br/>
-- 7 stable named safety gates — every intervention is identified and auditable<br/>
+- Per-step decision log: CGM, arm phase, cause, recommended dose, safety gate, delivered dose, IOB, suspension state<br/>
+- 8 stable named safety gates — every intervention is identified and auditable<br/>
 - Cause classification per step: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT<br/>
 - Full decision log exportable as CSV from Clinical Review mode
 </details>
