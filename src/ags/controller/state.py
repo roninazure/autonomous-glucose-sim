@@ -62,8 +62,33 @@ class ControllerInputs:
     swarm_bolus: bool = False
     # Minutes elapsed since the meal was first detected this session.
     # Used by the SWARM recommender to apply the early meal push multiplier
-    # (×1.5) during the first 20–45 min post-detection.
+    # during the early push window below.
     minutes_since_meal_detected: float = 0.0
+    # ── SWARM tuning parameters (passed from SafetyThresholds by runner) ─────
+    # Dosing formula coefficients.
+    swarm_u_base: float = 0.15
+    swarm_a_roc: float = 3.0
+    swarm_b_acc: float = 25.0
+    # Per-pulse ceiling for the SWARM micro-bolus formula.
+    swarm_max_pulse_u: float = 1.0
+    # IOB dampening breakpoints — dose scales 1.0× below bp1,
+    # 0.7× between bp1 and bp2, 0.4× at or above bp2.
+    swarm_iob_scale_bp1: float = 1.5
+    swarm_iob_scale_bp2: float = 3.0
+    # Early meal push window (minutes after first meal detection).
+    swarm_early_push_min_minutes: float = 5.0
+    swarm_early_push_max_minutes: float = 75.0
+    # Early push dose multiplier.
+    swarm_early_push_multiplier: float = 2.5
+    # Late-phase maintenance window and dose.
+    swarm_late_phase_glucose_min: float = 125.0
+    swarm_late_phase_glucose_max: float = 175.0
+    swarm_late_phase_roc_threshold: float = 0.2
+    swarm_late_phase_iob_max: float = 1.5
+    swarm_late_phase_dose_u: float = 0.125
+    # Micro-bolus glucose floor — main micro-bolus only fires above this.
+    swarm_min_glucose_for_microbolus: float = 130.0
+    swarm_min_glucose_during_meal: float = 120.0
 
 
 @dataclass

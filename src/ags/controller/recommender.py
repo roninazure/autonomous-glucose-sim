@@ -49,11 +49,15 @@ def _glucose_scale(glucose_mgdl: float) -> float:
         return 2.5
 
 
-def _iob_scale(iob_u: float) -> float:
-    """f(IOB): graduated dampening — avoids stacking, not a hard cut-off."""
-    if iob_u < 1.0:
+def _iob_scale(iob_u: float, bp1: float = 2.0, bp2: float = 4.0) -> float:
+    """f(IOB): graduated dampening — avoids stacking, not a hard cut-off.
+
+    Breakpoints are configurable so the algorithm stays aggressive through
+    the full meal absorption before backing off.
+    """
+    if iob_u < bp1:
         return 1.0
-    elif iob_u < 2.0:
+    elif iob_u < bp2:
         return 0.7
     else:
         return 0.4
@@ -64,12 +68,14 @@ def _swarm_micro_bolus(
     acc: float,
     glucose: float,
     iob: float,
-    u_base: float = 0.09,
-    a: float = 1.0,
-    b: float = 10.0,
-    max_pulse: float = 0.5,
+    u_base: float = 0.15,
+    a: float = 3.0,
+    b: float = 25.0,
+    max_pulse: float = 0.75,
+    iob_bp1: float = 2.0,
+    iob_bp2: float = 4.0,
     early_push: bool = False,
-    early_push_mult: float = 1.5,
+    early_push_mult: float = 2.5,
 ) -> tuple[float, str]:
     """Compute SWARM micro-bolus dose and reason string.
 
@@ -77,7 +83,7 @@ def _swarm_micro_bolus(
     Clamped to [0, max_pulse] per pulse.
     """
     f_g   = _glucose_scale(glucose)
-    f_iob = _iob_scale(iob)
+    f_iob = _iob_scale(iob, bp1=iob_bp1, bp2=iob_bp2)
     raw   = u_base * (1.0 + a * roc + b * acc) * f_g * f_iob
 
     push_label = ""
@@ -163,9 +169,9 @@ def _ror_to_microbolus_fraction(rate_mgdl_per_min: float) -> float:
     return _compute_microbolus_fraction(rate_mgdl_per_min, acceleration_mgdl_per_min2=0.0)
 
 
-def _prebolus_units(estimated_carbs_g: float, effective_isf: float) -> float:
+def _prebolus_units(estimated_carbs_g: float, effective_isf: float, fraction: float = 0.60) -> float:
     carb_impact_mgdl = estimated_carbs_g * 4.0
-    return max(0.0, (carb_impact_mgdl * 0.40) / effective_isf)
+    return max(0.0, (carb_impact_mgdl * fraction) / effective_isf)
 
 
 # ── Main entry point ──────────────────────────────────────────────────────────
@@ -210,19 +216,45 @@ def recommend_correction(
                     )
 
         # ── Late-phase maintenance ────────────────────────────────────────────
-        # G 140–160, ROC flat, IOB low → proactive maintenance pulse
+        # G in configured range, ROC flat, IOB low → proactive maintenance pulse
         # (safety arming gate also grants a late-phase exception for this)
         late_phase = (
-            140.0 <= glucose <= 160.0
-            and abs(roc) < 0.2
-            and iob < 0.5
+            inputs.swarm_late_phase_glucose_min <= glucose <= inputs.swarm_late_phase_glucose_max
+            and abs(roc) < inputs.swarm_late_phase_roc_threshold
+            and roc >= 0.0  # never maintain-dose into a falling glucose
+            and iob < inputs.swarm_late_phase_iob_max
         )
         if late_phase:
             return CorrectionRecommendation(
-                recommended_units=0.075,
+                recommended_units=inputs.swarm_late_phase_dose_u,
                 reason=(
                     f"SWARM late-phase maintenance | "
                     f"G={glucose:.0f} mg/dL | ROC={roc:+.2f} | IOB={iob:.2f} U"
+                ),
+            )
+
+        # ── Glucose floor: don't micro-bolus near target ─────────────────────
+        # Use a lower floor only when a substantial carb meal has been confirmed
+        # (estimated_carbs_g > 10) — hormonal rises (dawn, exercise) should
+        # NOT trigger the lower floor as they'll cause over-dosing.
+        # Pre-bolus and late-phase maintenance are always exempt from this gate.
+        meal_active = (
+            classification is not None
+            and classification.meal_signal is not None
+            and classification.meal_signal.detected
+            and classification.meal_signal.estimated_carbs_g > 10.0
+        )
+        active_floor = (
+            inputs.swarm_min_glucose_during_meal
+            if meal_active
+            else inputs.swarm_min_glucose_for_microbolus
+        )
+        if glucose < active_floor:
+            return CorrectionRecommendation(
+                recommended_units=0.0,
+                reason=(
+                    f"SWARM micro-bolus suppressed | "
+                    f"G={glucose:.0f} < floor {active_floor:.0f} mg/dL"
                 ),
             )
 
@@ -231,8 +263,6 @@ def recommend_correction(
             inputs.swarm_early_push_min_minutes
             <= inputs.minutes_since_meal_detected
             <= inputs.swarm_early_push_max_minutes
-        ) if hasattr(inputs, "swarm_early_push_min_minutes") else (
-            20.0 <= inputs.minutes_since_meal_detected <= 45.0
         )
 
         dose, reason = _swarm_micro_bolus(
@@ -240,7 +270,14 @@ def recommend_correction(
             acc=acc,
             glucose=glucose,
             iob=iob,
+            u_base=inputs.swarm_u_base,
+            a=inputs.swarm_a_roc,
+            b=inputs.swarm_b_acc,
+            max_pulse=inputs.swarm_max_pulse_u,
+            iob_bp1=inputs.swarm_iob_scale_bp1,
+            iob_bp2=inputs.swarm_iob_scale_bp2,
             early_push=early_push,
+            early_push_mult=inputs.swarm_early_push_multiplier,
         )
         return CorrectionRecommendation(recommended_units=dose, reason=reason)
 

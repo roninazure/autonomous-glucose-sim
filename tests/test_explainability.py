@@ -268,7 +268,10 @@ class TestAnnotateRun:
             simulation_inputs=baseline_meal_scenario(),
             duration_minutes=60,
         )
-        exps = annotate_run(records, seed_glucose_mgdl=140.0)
+        # Use the first record's CGM as seed so the annotator's arming gate
+        # starts with the same delta as the runner (avoids a wrong large
+        # negative delta that would incorrectly trigger HOLD).
+        exps = annotate_run(records, seed_glucose_mgdl=records[0].cgm_glucose_mgdl)
         for r, e in zip(records, exps):
             assert e.safety_status == r.safety_status, (
                 f"t={r.timestamp_min}: original={r.safety_status!r}, "
