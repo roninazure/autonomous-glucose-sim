@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import replace as _dc_replace
+
 from ags.safety.rules import (
     apply_arming_gate,
     apply_hypoglycemia_guard,
     apply_iob_guard,
     apply_max_interval_cap,
     apply_no_dose_guard,
+    apply_swarm_interval_caps,
     apply_trend_confirmation_guard,
 )
 from ags.safety.state import (
@@ -39,6 +42,17 @@ def evaluate_safety(
     if iob_decision is not None:
         return iob_decision
 
+    interval_decision = apply_swarm_interval_caps(inputs, thresholds)
+    if interval_decision is not None:
+        if not interval_decision.allowed:
+            # Rolling window exhausted — block entirely
+            return interval_decision
+        # Rolling window clipped the dose — apply per-pulse cap on top
+        return apply_max_interval_cap(
+            _dc_replace(inputs, recommended_units=interval_decision.final_units),
+            thresholds,
+        )
+
     return apply_max_interval_cap(inputs, thresholds)
 
 
@@ -68,7 +82,7 @@ def evaluate_safety_stateful(
         if arming_decision is not None:
             return arming_decision, suspend_state, new_arming
     else:
-        new_arming = ArmingState(phase="firing")
+        new_arming = ArmingState(phase="aggressive")
 
     # ── Gate 1: hypo suspension check ─────────────────────────────────────────
     resume_threshold = (
@@ -86,7 +100,7 @@ def evaluate_safety_stateful(
             # On resume, run normal stateless evaluation
             decision = evaluate_safety(inputs, thresholds)
             # Reset arming — system must re-confirm rise after hypo recovery
-            resumed_arming = ArmingState(phase="monitoring", steps_in_phase=0,
+            resumed_arming = ArmingState(phase="idle", steps_in_phase=0,
                                          baseline_glucose_mgdl=0.0)
             return decision, new_suspend, resumed_arming
         else:

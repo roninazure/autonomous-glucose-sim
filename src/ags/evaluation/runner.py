@@ -32,6 +32,7 @@ def run_evaluation(
     ror_tiered_microbolus: bool = False,
     autonomous_isf: bool = False,
     dual_wave_config: DualWaveConfig | None = None,
+    swarm_bolus: bool = False,
 ) -> tuple[list[TimestepRecord], RunSummary]:
     safety_thresholds = safety_thresholds or SafetyThresholds()
     pump_config = pump_config or PumpConfig()
@@ -71,12 +72,19 @@ def run_evaluation(
     dual_wave_state = DualWaveState()
 
     # Pre-bolus de-duplication: fire exactly once per meal event.
-    # Reset only after _MEAL_RESET_STREAK consecutive NONE steps so that a
-    # brief gap in the ONSET signal mid-meal does not prematurely re-arm the
-    # flag and allow a second pre-bolus for the same meal event.
     meal_prebolus_fired = False
     meal_none_streak = 0
     _MEAL_RESET_STREAK = 4  # 20 min of consecutive NONE before allowing new pre-bolus
+
+    # ── SWARM rolling delivery windows ────────────────────────────────────────
+    # Track delivery per step (oldest-first) for 30-min and 2-hr interval caps.
+    _30MIN_STEPS = max(1, 30 // step_minutes)   # 6 steps at 5-min cadence
+    _2HR_STEPS   = max(1, 120 // step_minutes)  # 24 steps
+    delivery_log: list[float] = []              # oldest first
+
+    # ── SWARM meal detection timer ────────────────────────────────────────────
+    # Track minutes since the meal was first detected for the early push mult.
+    meal_first_detected_step: int | None = None
 
     # ── Online ISF learning ───────────────────────────────────────────────────
     # After each significant dose, record (step, units, glucose_at_dose) and
@@ -117,6 +125,17 @@ def run_evaluation(
                 still_pending.append((obs_step, obs_units, obs_glucose))
         pending_isf_obs = still_pending
 
+        # ── SWARM rolling window sums (computed before this step's delivery) ──
+        delivered_last_30min = sum(delivery_log[-_30MIN_STEPS:])
+        delivered_last_2hr   = sum(delivery_log[-_2HR_STEPS:])
+
+        # ── SWARM meal detection timer ────────────────────────────────────────
+        # Computed before controller runs so it can read the current value.
+        minutes_since_meal = (
+            (step_idx - meal_first_detected_step) * step_minutes
+            if meal_first_detected_step is not None else 0.0
+        )
+
         controller_inputs = ControllerInputs(
             current_glucose_mgdl=current.cgm_glucose_mgdl,
             previous_glucose_mgdl=previous.cgm_glucose_mgdl,
@@ -131,23 +150,24 @@ def run_evaluation(
             autonomous_isf=autonomous_isf,
             prebolus_already_fired=meal_prebolus_fired,
             isf_observations=list(isf_observations),
+            swarm_bolus=swarm_bolus,
+            minutes_since_meal_detected=minutes_since_meal,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)
         meal_signal = classification.meal_signal if classification else None
 
-        # ── Pre-bolus de-duplication state update ─────────────────────────────
-        # If a pre-bolus just fired, mark it so subsequent ONSET steps skip it.
-        # Reset only after _MEAL_RESET_STREAK consecutive NONE steps so that a
-        # brief interruption in the ONSET signal mid-meal does not prematurely
-        # re-arm the flag and trigger a second pre-bolus for the same meal.
+        # ── Pre-bolus de-duplication + meal timer update ──────────────────────
         if meal_signal is None or meal_signal.phase == MealPhase.NONE:
             meal_none_streak += 1
             if meal_none_streak >= _MEAL_RESET_STREAK:
                 meal_prebolus_fired = False
+                meal_first_detected_step = None
         else:
             meal_none_streak = 0
-            if recommendation.reason.startswith("pre-bolus | meal ONSET"):
+            if meal_first_detected_step is None:
+                meal_first_detected_step = step_idx
+            if recommendation.reason.startswith(("pre-bolus | meal ONSET", "SWARM pre-bolus")):
                 meal_prebolus_fired = True
 
         safety_inputs = build_safety_inputs(
@@ -156,6 +176,9 @@ def run_evaluation(
             signal=signal,
             insulin_on_board_u=step_iob_u,
             current_glucose_mgdl=current.cgm_glucose_mgdl,
+            delivered_last_30min_u=delivered_last_30min,
+            delivered_last_2hr_u=delivered_last_2hr,
+            minutes_since_meal_detected=minutes_since_meal,
         )
 
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
@@ -207,6 +230,11 @@ def run_evaluation(
         if total_delivered > 0.05:
             pending_isf_obs.append((step_idx, total_delivered, current.cgm_glucose_mgdl))
 
+        # ── SWARM rolling window: record this step's delivery ─────────────────
+        delivery_log.append(total_delivered)
+        if len(delivery_log) > _2HR_STEPS:
+            delivery_log = delivery_log[-_2HR_STEPS:]
+
         # Advance PK/PD state: the delivered dose enters the subcutaneous
         # depot (x1) and transfers into the active pool (x2) over time.
         tracked_x1, tracked_x2 = advance_insulin_compartments(
@@ -242,6 +270,8 @@ def run_evaluation(
                 recommendation_reason=recommendation.reason,
                 isf_observation_count=len(isf_observations),
                 arming_phase=arming_state.phase,
+                delivered_last_30min_u=delivered_last_30min,
+                delivered_last_2hr_u=delivered_last_2hr,
             )
         )
 
@@ -263,6 +293,7 @@ def run_closed_loop_evaluation(
     ror_tiered_microbolus: bool = False,
     autonomous_isf: bool = False,
     initial_glucose_mgdl: float = 110.0,
+    swarm_bolus: bool = False,
 ) -> tuple[list[TimestepRecord], RunSummary]:
     """True closed-loop evaluation: delivered insulin changes the glucose trajectory.
 
@@ -321,6 +352,14 @@ def run_closed_loop_evaluation(
     meal_none_streak = 0
     _MEAL_RESET_STREAK = 4
 
+    # ── SWARM rolling delivery windows ────────────────────────────────────────
+    _30MIN_STEPS = max(1, 30 // step_minutes)
+    _2HR_STEPS   = max(1, 120 // step_minutes)
+    delivery_log: list[float] = []
+
+    # ── SWARM meal detection timer ────────────────────────────────────────────
+    meal_first_detected_step: int | None = None
+
     # Online ISF learning
     _ISF_LEARNING_HORIZON_STEPS = max(1, 60 // step_minutes)
     _ISF_MAX_OBS = 12
@@ -351,6 +390,16 @@ def run_closed_loop_evaluation(
                 still_pending.append((obs_step, obs_units, obs_glucose))
         pending_isf_obs = still_pending
 
+        # ── SWARM rolling window sums ─────────────────────────────────────────
+        delivered_last_30min = sum(delivery_log[-_30MIN_STEPS:])
+        delivered_last_2hr   = sum(delivery_log[-_2HR_STEPS:])
+
+        # ── SWARM meal detection timer ────────────────────────────────────────
+        minutes_since_meal = (
+            (step_idx - meal_first_detected_step) * step_minutes
+            if meal_first_detected_step is not None else 0.0
+        )
+
         prev_glucose = cgm_history[-2] if len(cgm_history) >= 2 else current.cgm_glucose_mgdl
 
         controller_inputs = ControllerInputs(
@@ -367,19 +416,24 @@ def run_closed_loop_evaluation(
             autonomous_isf=autonomous_isf,
             prebolus_already_fired=meal_prebolus_fired,
             isf_observations=list(isf_observations),
+            swarm_bolus=swarm_bolus,
+            minutes_since_meal_detected=minutes_since_meal,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)
         meal_signal = classification.meal_signal if classification else None
 
-        # Pre-bolus de-duplication state update
+        # Pre-bolus de-duplication + meal timer update
         if meal_signal is None or meal_signal.phase == MealPhase.NONE:
             meal_none_streak += 1
             if meal_none_streak >= _MEAL_RESET_STREAK:
                 meal_prebolus_fired = False
+                meal_first_detected_step = None
         else:
             meal_none_streak = 0
-            if recommendation.reason.startswith("pre-bolus | meal ONSET"):
+            if meal_first_detected_step is None:
+                meal_first_detected_step = step_idx
+            if recommendation.reason.startswith(("pre-bolus | meal ONSET", "SWARM pre-bolus")):
                 meal_prebolus_fired = True
 
         safety_inputs = build_safety_inputs(
@@ -388,6 +442,9 @@ def run_closed_loop_evaluation(
             signal=signal,
             insulin_on_board_u=step_iob_u,
             current_glucose_mgdl=current.cgm_glucose_mgdl,
+            delivered_last_30min_u=delivered_last_30min,
+            delivered_last_2hr_u=delivered_last_2hr,
+            minutes_since_meal_detected=minutes_since_meal,
         )
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,
@@ -404,6 +461,11 @@ def run_closed_loop_evaluation(
         # Queue for ISF learning
         if total_delivered > 0.05:
             pending_isf_obs.append((step_idx, total_delivered, current.cgm_glucose_mgdl))
+
+        # ── SWARM rolling window: record this step's delivery ─────────────────
+        delivery_log.append(total_delivered)
+        if len(delivery_log) > _2HR_STEPS:
+            delivery_log = delivery_log[-_2HR_STEPS:]
 
         records.append(TimestepRecord(
             timestamp_min=current.timestamp_min,
@@ -428,6 +490,8 @@ def run_closed_loop_evaluation(
             recommendation_reason=recommendation.reason,
             isf_observation_count=len(isf_observations),
             arming_phase=arming_state.phase,
+            delivered_last_30min_u=delivered_last_30min,
+            delivered_last_2hr_u=delivered_last_2hr,
         ))
 
         # ── THE CLOSED LOOP ───────────────────────────────────────────────────

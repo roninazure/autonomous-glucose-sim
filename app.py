@@ -240,6 +240,7 @@ def _run_scenario(name: str, duration_minutes: int | None = None) -> tuple:
         step_minutes=_STEP,
         target_glucose_mgdl=_TARGET,
         correction_factor_mgdl_per_unit=_ISF,
+        swarm_bolus=True,
     )
     hypo_steps = summary.time_below_range_steps
     return records, summary, hypo_steps

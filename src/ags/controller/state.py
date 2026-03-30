@@ -57,6 +57,13 @@ class ControllerInputs:
     # consecutive ONSET step of the same meal.  Reset by the runner when the
     # meal signal returns to NONE (meal over).
     prebolus_already_fired: bool = False
+    # When True, use the SWARM Auto-Bolus formula (ACC + ROC driven) instead
+    # of the legacy correction-fraction approach.
+    swarm_bolus: bool = False
+    # Minutes elapsed since the meal was first detected this session.
+    # Used by the SWARM recommender to apply the early meal push multiplier
+    # (×1.5) during the first 20–45 min post-detection.
+    minutes_since_meal_detected: float = 0.0
 
 
 @dataclass
