@@ -33,7 +33,7 @@ from ags.pump.state import PumpConfig
 from ags.retrospective.loader import CgmReading
 from ags.safety.evaluator import evaluate_safety_stateful
 from ags.safety.integration import build_safety_inputs
-from ags.safety.state import SafetyThresholds, SuspendState
+from ags.safety.state import ArmingState, SafetyThresholds, SuspendState
 from ags.simulation.insulin import advance_insulin_compartments, insulin_on_board
 
 
@@ -101,6 +101,7 @@ def run_retrospective(
     cgm_history: list[float] = [readings[0].glucose_mgdl]
 
     suspend_state = SuspendState()
+    arming_state = ArmingState()
     records: list[TimestepRecord] = []
 
     for previous, current in zip(readings[:-1], readings[1:]):
@@ -132,10 +133,11 @@ def run_retrospective(
             insulin_on_board_u=step_iob_u,
         )
 
-        safety_decision, suspend_state, _ = evaluate_safety_stateful(
+        safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,
             thresholds=safety_thresholds,
             suspend_state=suspend_state,
+            arming_state=arming_state,
         )
 
         pump_result = run_pump_with_safety_output(
