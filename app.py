@@ -84,7 +84,7 @@ SCENARIOS: dict[str, object] = {
 }
 
 SCENARIO_DURATIONS: dict[str, int] = {
-    "Baseline Meal":           180,
+    "Baseline Meal":           240,
     "Dawn Phenomenon":         240,
     "Sustained Basal Deficit": 240,
     "Exercise Hypoglycemia":   120,
