@@ -24,7 +24,7 @@ class SafetyInputs:
 @dataclass
 class SafetyThresholds:
     max_units_per_interval: float = 1.0           # per-pulse cap (matches swarm_max_pulse_u)
-    max_insulin_on_board_u: float = 5.0          # hard IOB ceiling
+    max_insulin_on_board_u: float = 7.0          # hard IOB ceiling (IOB-aware pred gates lower at normal glucose)
     min_predicted_glucose_mgdl: float = 95.0     # predict at 30 min — block earlier
     require_confirmed_trend: bool = False   # arming gate supersedes this in SWARM mode
     hypo_resume_margin_mgdl: float = 10.0
@@ -58,7 +58,7 @@ class SafetyThresholds:
 
     # ── SWARM interval delivery caps ─────────────────────────────────────────
     swarm_max_per_30min_u: float = 3.5           # max delivered over rolling 30-min window
-    swarm_max_per_2hr_u: float = 6.0            # max delivered over rolling 2-hr window
+    swarm_max_per_2hr_u: float = 8.0            # max delivered over rolling 2-hr window
 
     # ── SWARM early meal push ─────────────────────────────────────────────────
     swarm_early_push_multiplier: float = 2.5     # dose multiplier during early window (was 1.5)
