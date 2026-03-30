@@ -43,8 +43,11 @@ def test_evaluate_safety_blocks_high_iob() -> None:
         predicted_glucose_mgdl=180.0,
         insulin_on_board_u=3.5,
     )
+    # Use an explicit IOB ceiling of 3.0U so this test is independent of the
+    # default max_insulin_on_board_u (which may be tuned for clinical targets).
+    thresholds = SafetyThresholds(max_insulin_on_board_u=3.0)
 
-    decision = evaluate_safety(inputs)
+    decision = evaluate_safety(inputs, thresholds)
 
     assert decision.status == "blocked"
     assert decision.allowed is False

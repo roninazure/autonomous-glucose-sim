@@ -152,6 +152,22 @@ def run_evaluation(
             isf_observations=list(isf_observations),
             swarm_bolus=swarm_bolus,
             minutes_since_meal_detected=minutes_since_meal,
+            swarm_u_base=safety_thresholds.swarm_u_base,
+            swarm_a_roc=safety_thresholds.swarm_a_roc,
+            swarm_b_acc=safety_thresholds.swarm_b_acc,
+            swarm_max_pulse_u=safety_thresholds.swarm_max_pulse_u,
+            swarm_iob_scale_bp1=safety_thresholds.swarm_iob_scale_bp1,
+            swarm_iob_scale_bp2=safety_thresholds.swarm_iob_scale_bp2,
+            swarm_early_push_min_minutes=safety_thresholds.swarm_early_push_min_minutes,
+            swarm_early_push_max_minutes=safety_thresholds.swarm_early_push_max_minutes,
+            swarm_early_push_multiplier=safety_thresholds.swarm_early_push_multiplier,
+            swarm_late_phase_glucose_min=safety_thresholds.swarm_late_phase_glucose_min,
+            swarm_late_phase_glucose_max=safety_thresholds.swarm_late_phase_glucose_max,
+            swarm_late_phase_roc_threshold=safety_thresholds.swarm_late_phase_roc_threshold,
+            swarm_late_phase_iob_max=safety_thresholds.swarm_late_phase_iob_max,
+            swarm_late_phase_dose_u=safety_thresholds.swarm_late_phase_dose_u,
+            swarm_min_glucose_for_microbolus=safety_thresholds.swarm_min_glucose_for_microbolus,
+            swarm_min_glucose_during_meal=safety_thresholds.swarm_min_glucose_during_meal,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)
@@ -179,6 +195,7 @@ def run_evaluation(
             delivered_last_30min_u=delivered_last_30min,
             delivered_last_2hr_u=delivered_last_2hr,
             minutes_since_meal_detected=minutes_since_meal,
+            correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
         )
 
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
@@ -418,6 +435,22 @@ def run_closed_loop_evaluation(
             isf_observations=list(isf_observations),
             swarm_bolus=swarm_bolus,
             minutes_since_meal_detected=minutes_since_meal,
+            swarm_u_base=safety_thresholds.swarm_u_base,
+            swarm_a_roc=safety_thresholds.swarm_a_roc,
+            swarm_b_acc=safety_thresholds.swarm_b_acc,
+            swarm_max_pulse_u=safety_thresholds.swarm_max_pulse_u,
+            swarm_iob_scale_bp1=safety_thresholds.swarm_iob_scale_bp1,
+            swarm_iob_scale_bp2=safety_thresholds.swarm_iob_scale_bp2,
+            swarm_early_push_min_minutes=safety_thresholds.swarm_early_push_min_minutes,
+            swarm_early_push_max_minutes=safety_thresholds.swarm_early_push_max_minutes,
+            swarm_early_push_multiplier=safety_thresholds.swarm_early_push_multiplier,
+            swarm_late_phase_glucose_min=safety_thresholds.swarm_late_phase_glucose_min,
+            swarm_late_phase_glucose_max=safety_thresholds.swarm_late_phase_glucose_max,
+            swarm_late_phase_roc_threshold=safety_thresholds.swarm_late_phase_roc_threshold,
+            swarm_late_phase_iob_max=safety_thresholds.swarm_late_phase_iob_max,
+            swarm_late_phase_dose_u=safety_thresholds.swarm_late_phase_dose_u,
+            swarm_min_glucose_for_microbolus=safety_thresholds.swarm_min_glucose_for_microbolus,
+            swarm_min_glucose_during_meal=safety_thresholds.swarm_min_glucose_during_meal,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)
@@ -445,6 +478,7 @@ def run_closed_loop_evaluation(
             delivered_last_30min_u=delivered_last_30min,
             delivered_last_2hr_u=delivered_last_2hr,
             minutes_since_meal_detected=minutes_since_meal,
+            correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
         )
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,
