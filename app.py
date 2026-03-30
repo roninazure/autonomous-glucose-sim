@@ -84,7 +84,7 @@ SCENARIOS: dict[str, object] = {
 }
 
 SCENARIO_DURATIONS: dict[str, int] = {
-    "Baseline Meal":           180,
+    "Baseline Meal":           240,
     "Dawn Phenomenon":         240,
     "Sustained Basal Deficit": 240,
     "Exercise Hypoglycemia":   120,
@@ -240,6 +240,7 @@ def _run_scenario(name: str, duration_minutes: int | None = None) -> tuple:
         step_minutes=_STEP,
         target_glucose_mgdl=_TARGET,
         correction_factor_mgdl_per_unit=_ISF,
+        swarm_bolus=True,
     )
     hypo_steps = summary.time_below_range_steps
     return records, summary, hypo_steps

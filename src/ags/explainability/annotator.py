@@ -116,6 +116,8 @@ def annotate_run(
             signal=signal,
             insulin_on_board_u=iob_u,
             current_glucose_mgdl=current_glucose,
+            delivered_last_30min_u=record.delivered_last_30min_u,
+            delivered_last_2hr_u=record.delivered_last_2hr_u,
         )
 
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(

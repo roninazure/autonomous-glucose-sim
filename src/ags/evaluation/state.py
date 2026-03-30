@@ -28,8 +28,12 @@ class TimestepRecord:
     basal_drift_rate_mgdl_per_min: float = 0.0
     basal_drift_linearity: float = 0.0
     glucose_cause: str = "flat"       # GlucoseCause enum value
-    # Arming gate phase at this timestep ("monitoring" | "armed" | "firing")
-    arming_phase: str = "monitoring"
+    # SWARM arming gate phase at this timestep ("idle" | "rising" | "aggressive" | "hold")
+    arming_phase: str = "idle"
+    # Rolling delivery sums used by the interval caps — recorded so that the
+    # annotator can reproduce safety decisions without re-tracking delivery history.
+    delivered_last_30min_u: float = 0.0
+    delivered_last_2hr_u: float = 0.0
     # Human-readable reason string from the recommender — useful for debugging
     # and for tracking when the online ISF estimate is influencing decisions.
     recommendation_reason: str = ""
