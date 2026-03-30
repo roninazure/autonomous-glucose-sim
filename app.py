@@ -12,7 +12,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from ags.evaluation.runner import run_evaluation
+from ags.evaluation.runner import run_closed_loop_evaluation
 from ags.pump.state import PumpConfig
 from ags.safety.state import SafetyThresholds
 from ags.simulation.scenarios import (
@@ -232,7 +232,7 @@ def _get_clinical_summary(results: dict) -> str:
 def _run_scenario(name: str, duration_minutes: int | None = None) -> tuple:
     sim_inputs = SCENARIOS[name]()
     dur = duration_minutes or SCENARIO_DURATIONS.get(name, 180)
-    records, summary = run_evaluation(
+    records, summary = run_closed_loop_evaluation(
         simulation_inputs=sim_inputs,
         safety_thresholds=_THRESHOLDS,
         pump_config=_PUMP,
