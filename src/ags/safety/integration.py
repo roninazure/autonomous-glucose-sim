@@ -22,7 +22,7 @@ def build_safety_inputs(
     # Above it the ROC predictor is blind to accumulated insulin, so we subtract
     # the expected 30-min effect (60 % of IOB × ISF) to block further dosing.
     _IOB_DECAY_FRACTION_30MIN = 0.60
-    _IOB_APPLY_THRESHOLD_U = 4.5
+    _IOB_APPLY_THRESHOLD_U = 5.2
     if delivered_last_2hr_u > 0.0 and insulin_on_board_u > _IOB_APPLY_THRESHOLD_U:
         iob_adjusted = (
             prediction.predicted_glucose_mgdl

@@ -31,9 +31,9 @@ class SafetyThresholds:
 
     # ── SWARM Auto-Bolus state machine thresholds ─────────────────────────────
     # State 1 — Idle: ROC ≤ this AND ACC ≤ 0 → block
-    swarm_idle_roc_max: float = 0.3
+    swarm_idle_roc_max: float = 0.2
     # State 2 — Rising: confirmed entry conditions
-    swarm_rising_roc_min: float = 0.3            # ROC ≥ this for swarm_rising_steps → rising
+    swarm_rising_roc_min: float = 0.2            # ROC ≥ this for swarm_rising_steps → rising
     swarm_rising_steps: int = 1                  # arm on first rising step (was 2)
     swarm_rising_roc_with_acc: float = 0.2       # ROC ≥ this with ACC > 0 → rising immediately
     # State 3 — Aggressive: higher-intensity dosing
@@ -57,7 +57,7 @@ class SafetyThresholds:
     swarm_iob_scale_bp2: float = 3.0             # <bp2 → 0.7×, ≥bp2 → 0.4×
 
     # ── SWARM interval delivery caps ─────────────────────────────────────────
-    swarm_max_per_30min_u: float = 3.5           # max delivered over rolling 30-min window
+    swarm_max_per_30min_u: float = 4.5           # max delivered over rolling 30-min window
     swarm_max_per_2hr_u: float = 8.0            # max delivered over rolling 2-hr window
 
     # ── SWARM early meal push ─────────────────────────────────────────────────

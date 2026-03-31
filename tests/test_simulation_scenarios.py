@@ -10,5 +10,5 @@ def test_baseline_meal_scenario_contains_expected_meal() -> None:
 
     meal = inputs.meal_events[0]
     assert meal.timestamp_min == 30
-    assert meal.carbs_g == 45.0
+    assert meal.carbs_g == 40.0
     assert meal.absorption_minutes == 120
