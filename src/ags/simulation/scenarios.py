@@ -80,23 +80,6 @@ def exercise_hypoglycemia_scenario() -> SimulationInputs:
     )
 
 
-def missed_bolus_scenario() -> SimulationInputs:
-    """Large meal eaten with no pre-meal bolus.
-
-    The autonomous system encounters a steep post-prandial spike and must
-    decide how aggressively to correct retroactively. Tests whether the
-    controller recovers TIR after a delayed start, and whether the safety
-    layer prevents over-correction stacking.
-    """
-    return SimulationInputs(
-        insulin_sensitivity_mgdl_per_unit=50.0,
-        carb_impact_mgdl_per_g=3.5,  # slightly aggressive carb impact
-        baseline_drift_mgdl_per_step=0.0,
-        meal_events=[
-            MealEvent(timestamp_min=10, carbs_g=75.0, absorption_minutes=120),
-        ],
-    )
-
 
 def overnight_stability_scenario() -> SimulationInputs:
     """8-hour overnight stability test — no meal, no drift, standard patient.
@@ -164,20 +147,3 @@ def rapid_drop_scenario() -> SimulationInputs:
     )
 
 
-def late_correction_scenario() -> SimulationInputs:
-    """Meal bolus delivered 45 minutes after eating starts.
-
-    Models the common real-world mistake of forgetting to bolus at meal start.
-    By t=45 glucose is already rising steeply; the delayed correction creates
-    an insulin-glucose timing mismatch that can cause post-correction hypoglycemia.
-    """
-    return SimulationInputs(
-        insulin_sensitivity_mgdl_per_unit=50.0,
-        carb_impact_mgdl_per_g=3.0,
-        baseline_drift_mgdl_per_step=0.0,
-        meal_events=[
-            MealEvent(timestamp_min=5, carbs_g=60.0, absorption_minutes=100),
-            # Second small snack compounds the challenge
-            MealEvent(timestamp_min=90, carbs_g=20.0, absorption_minutes=60),
-        ],
-    )

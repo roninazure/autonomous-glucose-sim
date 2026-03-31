@@ -20,6 +20,7 @@ def _run(duration_minutes: int = 180, autonomous: bool = True):
         step_minutes=5,
         seed=42,
         autonomous_isf=autonomous,
+        swarm_bolus=autonomous,
     )
 
 
@@ -93,14 +94,14 @@ def test_drift_controller_delivers_more_insulin_than_no_correction() -> None:
     """
     records_autonomous, _ = _run(autonomous=True)
 
-    # Zero-fraction run: controller sees same signals but delivers nothing
+    # No-SWARM run: swarm_bolus=False → controller always returns 0 U
     records_no_correction, _ = run_evaluation(
         simulation_inputs=sustained_basal_deficit_scenario(),
         duration_minutes=180,
         step_minutes=5,
         seed=42,
         autonomous_isf=False,
-        microbolus_fraction=0.0,
+        swarm_bolus=False,
     )
 
     total_autonomous = sum(r.pump_delivered_units for r in records_autonomous)

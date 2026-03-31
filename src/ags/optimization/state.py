@@ -42,7 +42,7 @@ class PSOConfig:
     scenario_names: list[str] = field(default_factory=lambda: [
         "Baseline Meal",
         "Dawn Phenomenon",
-        "Missed Bolus",
+        "Stacked Corrections",
     ])
     duration_minutes: int = 180
     step_minutes: int = 5

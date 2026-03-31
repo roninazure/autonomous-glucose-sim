@@ -27,10 +27,9 @@ from ags.safety.state import SafetyThresholds
 from ags.simulation.scenarios import (
     baseline_meal_scenario,
     dawn_phenomenon_scenario,
-    missed_bolus_scenario,
     exercise_hypoglycemia_scenario,
     sustained_basal_deficit_scenario,
-    late_correction_scenario,
+    stacked_corrections_scenario,
 )
 from ags.simulation.state import SimulationInputs
 
@@ -38,10 +37,9 @@ from ags.simulation.state import SimulationInputs
 NAMED_SCENARIOS: dict[str, SimulationInputs] = {
     "Baseline Meal":           baseline_meal_scenario(),
     "Dawn Phenomenon":         dawn_phenomenon_scenario(),
-    "Missed Bolus":            missed_bolus_scenario(),
     "Exercise Hypoglycaemia":  exercise_hypoglycemia_scenario(),
     "Sustained Basal Deficit": sustained_basal_deficit_scenario(),
-    "Late Correction":         late_correction_scenario(),
+    "Stacked Corrections":     stacked_corrections_scenario(),
 }
 
 

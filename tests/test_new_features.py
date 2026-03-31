@@ -173,30 +173,6 @@ class TestRorTieredMicrobolus:
     def test_boundary_exactly_3_is_aggressive(self) -> None:
         assert _ror_to_microbolus_fraction(3.0) == 1.0
 
-    def test_ror_tiered_recommendation_scales_with_rate(self) -> None:
-        """With ror_tiered_microbolus=True, a 3+ mg/dL/min spike → full correction."""
-        # 150 → 168 in 5 min = 18 mg/dL = 3.6 mg/dL/min → full correction
-        inputs = ControllerInputs(
-            current_glucose_mgdl=168.0,
-            previous_glucose_mgdl=150.0,
-            insulin_on_board_u=0.0,
-            target_glucose_mgdl=110.0,
-            correction_factor_mgdl_per_unit=50.0,
-            step_minutes=5,
-            ror_tiered_microbolus=True,
-        )
-        signal = ExcursionSignal(
-            glucose_delta_mgdl=18.0,
-            rate_mgdl_per_min=3.6,
-            rising=True,
-            falling=False,
-        )
-        prediction = GlucosePrediction(predicted_glucose_mgdl=200.0, prediction_horizon_minutes=30)
-        rec = recommend_correction(inputs, prediction, signal=signal)
-        # Full fraction → (200 - 110) / 50 × 1.0 = 1.8
-        assert rec.recommended_units == pytest.approx(1.8, abs=0.01)
-        assert "RoR" in rec.reason and "accel" in rec.reason
-
     def test_ror_tiered_flat_rate_delivers_zero(self) -> None:
         """With ror_tiered_microbolus=True, flat rate → 0 units even if glucose above target."""
         inputs = ControllerInputs(

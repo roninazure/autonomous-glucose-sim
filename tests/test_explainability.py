@@ -239,7 +239,7 @@ class TestAnnotateRun:
 
     def test_safety_status_matches_records(self):
         records, _ = run_retrospective(readings=DAWN_RISE)
-        exps = annotate_run(records, seed_glucose_mgdl=DAWN_RISE[0].glucose_mgdl)
+        exps = annotate_run(records, seed_glucose_mgdl=DAWN_RISE[0].glucose_mgdl, swarm_bolus=True)
         for r, e in zip(records, exps):
             assert e.safety_status == r.safety_status
 

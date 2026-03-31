@@ -88,65 +88,47 @@ def test_predict_horizon_stored_correctly():
 
 # ── Controller config field tests ────────────────────────────────────────────
 
-def test_min_excursion_delta_suppresses_small_delta():
+def test_swarm_floor_suppresses_below_threshold():
+    """SWARM micro-bolus is suppressed when glucose is below the floor (130 mg/dL)."""
     from ags.controller.recommender import recommend_correction
-    from ags.controller.state import GlucosePrediction
+    from ags.controller.state import ExcursionSignal, GlucosePrediction
 
     inputs = ControllerInputs(
         current_glucose_mgdl=115.0,
-        previous_glucose_mgdl=113.0,  # delta = 2.0
+        previous_glucose_mgdl=113.0,
         insulin_on_board_u=0.0,
-        target_glucose_mgdl=110.0,
-        correction_factor_mgdl_per_unit=50.0,
-        min_excursion_delta_mgdl=5.0,  # threshold above the actual delta
+        swarm_bolus=True,
     )
-    prediction = GlucosePrediction(predicted_glucose_mgdl=130.0, prediction_horizon_minutes=30)
-    rec = recommend_correction(inputs, prediction)
+    signal = ExcursionSignal(
+        glucose_delta_mgdl=2.0,
+        rate_mgdl_per_min=0.4,
+        rising=True,
+        falling=False,
+    )
+    prediction = GlucosePrediction(predicted_glucose_mgdl=127.0, prediction_horizon_minutes=30)
+    rec = recommend_correction(inputs, prediction, signal=signal)
     assert rec.recommended_units == 0.0
-    assert "threshold" in rec.reason
+    assert "suppressed" in rec.reason
 
 
-def test_min_excursion_delta_allows_large_delta():
+def test_swarm_fires_above_floor():
+    """SWARM micro-bolus fires when glucose is above the floor and ROC is positive."""
     from ags.controller.recommender import recommend_correction
-    from ags.controller.state import GlucosePrediction
+    from ags.controller.state import ExcursionSignal, GlucosePrediction
 
     inputs = ControllerInputs(
-        current_glucose_mgdl=125.0,
-        previous_glucose_mgdl=110.0,  # delta = 15.0
+        current_glucose_mgdl=145.0,
+        previous_glucose_mgdl=130.0,  # delta = 15.0
         insulin_on_board_u=0.0,
-        target_glucose_mgdl=110.0,
-        correction_factor_mgdl_per_unit=50.0,
-        min_excursion_delta_mgdl=5.0,
+        swarm_bolus=True,
     )
-    prediction = GlucosePrediction(predicted_glucose_mgdl=160.0, prediction_horizon_minutes=30)
-    rec = recommend_correction(inputs, prediction)
+    signal = ExcursionSignal(
+        glucose_delta_mgdl=15.0,
+        rate_mgdl_per_min=3.0,
+        rising=True,
+        falling=False,
+    )
+    prediction = GlucosePrediction(predicted_glucose_mgdl=235.0, prediction_horizon_minutes=30)
+    rec = recommend_correction(inputs, prediction, signal=signal)
     assert rec.recommended_units > 0.0
-
-
-def test_microbolus_fraction_scales_dose():
-    from ags.controller.recommender import recommend_correction
-    from ags.controller.state import GlucosePrediction
-
-    base_inputs = ControllerInputs(
-        current_glucose_mgdl=140.0,
-        previous_glucose_mgdl=130.0,
-        insulin_on_board_u=0.0,
-        target_glucose_mgdl=110.0,
-        correction_factor_mgdl_per_unit=50.0,
-        microbolus_fraction=1.0,
-    )
-    micro_inputs = ControllerInputs(
-        current_glucose_mgdl=140.0,
-        previous_glucose_mgdl=130.0,
-        insulin_on_board_u=0.0,
-        target_glucose_mgdl=110.0,
-        correction_factor_mgdl_per_unit=50.0,
-        microbolus_fraction=0.25,
-    )
-    prediction = GlucosePrediction(predicted_glucose_mgdl=160.0, prediction_horizon_minutes=30)
-
-    full = recommend_correction(base_inputs, prediction)
-    micro = recommend_correction(micro_inputs, prediction)
-
-    assert pytest.approx(micro.recommended_units, rel=1e-4) == full.recommended_units * 0.25
-    assert "microbolus" in micro.reason
+    assert "SWARM micro-bolus" in rec.reason
