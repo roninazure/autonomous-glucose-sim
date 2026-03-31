@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from ags.controller.pipeline import run_controller
 from ags.controller.state import ControllerInputs
+from ags.detection.state import MealPhase
 from ags.evaluation.state import TimestepRecord
 from ags.explainability.narrative import build_narrative
 from ags.explainability.state import (
@@ -37,7 +38,8 @@ from ags.safety.evaluator import evaluate_safety_stateful
 from ags.safety.integration import build_safety_inputs
 from ags.safety.state import ArmingState, SafetyThresholds, SuspendState
 
-_HISTORY_WINDOW = 5
+_HISTORY_WINDOW = 12  # matches runner's CGM history window for EWM prediction fidelity
+_MEAL_RESET_STREAK = 4  # matches runner: 20 min of NONE before allowing new pre-bolus
 # Rate-of-rise thresholds in mg/dL/min (detector.py uses per-minute rates).
 _RISE_THRESHOLD_PER_MIN = 1.0
 _FALL_THRESHOLD_PER_MIN = -1.0
@@ -88,6 +90,11 @@ def annotate_run(
 
     previous_glucose = seed_glucose_mgdl
 
+    # Pre-bolus de-duplication state — mirrors the runner so that the annotator
+    # fires the pre-bolus at most once per meal event, matching the original run.
+    meal_prebolus_fired = False
+    meal_none_streak = 0
+
     for record in records:
         current_glucose = record.cgm_glucose_mgdl
         iob_u = record.insulin_on_board_u
@@ -106,9 +113,21 @@ def annotate_run(
             min_excursion_delta_mgdl=min_excursion_delta_mgdl,
             microbolus_fraction=microbolus_fraction,
             step_minutes=step_minutes,
+            prebolus_already_fired=meal_prebolus_fired,
         )
 
-        signal, prediction, recommendation, _meal_signal = run_controller(controller_inputs)
+        signal, prediction, recommendation, classification = run_controller(controller_inputs)
+        meal_signal = classification.meal_signal if classification else None
+
+        # Update pre-bolus state — mirrors runner logic
+        if meal_signal is None or meal_signal.phase == MealPhase.NONE:
+            meal_none_streak += 1
+            if meal_none_streak >= _MEAL_RESET_STREAK:
+                meal_prebolus_fired = False
+        else:
+            meal_none_streak = 0
+            if recommendation.reason.startswith(("pre-bolus | meal ONSET", "SWARM pre-bolus")):
+                meal_prebolus_fired = True
 
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
