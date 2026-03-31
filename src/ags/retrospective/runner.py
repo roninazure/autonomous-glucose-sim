@@ -53,6 +53,7 @@ class RetrospectiveConfig:
     microbolus_fraction: float = 1.0
     insulin_peak_minutes: float = 75.0
     ror_tiered_microbolus: bool = False
+    swarm_bolus: bool = True
 
 
 def run_retrospective(
@@ -96,8 +97,8 @@ def run_retrospective(
     tracked_x1 = 0.0
     tracked_x2 = 0.0
 
-    # Rolling CGM history for the predictor (smoothing window)
-    _HISTORY_WINDOW = 5
+    # Rolling CGM history for the predictor (smoothing window — matches evaluation runner and annotator)
+    _HISTORY_WINDOW = 12
     cgm_history: list[float] = [readings[0].glucose_mgdl]
 
     suspend_state = SuspendState()
@@ -122,6 +123,7 @@ def run_retrospective(
             microbolus_fraction=config.microbolus_fraction,
             step_minutes=int(step_minutes),
             ror_tiered_microbolus=config.ror_tiered_microbolus,
+            swarm_bolus=config.swarm_bolus,
         )
 
         signal, prediction, recommendation, _meal_signal = run_controller(controller_inputs)

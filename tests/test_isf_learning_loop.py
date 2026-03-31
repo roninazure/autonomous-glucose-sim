@@ -33,6 +33,7 @@ def test_isf_observation_count_grows_after_observations_mature() -> None:
         step_minutes=5,
         seed=42,
         autonomous_isf=True,
+        swarm_bolus=True,
     )
 
     assert records, "Expected at least one record"

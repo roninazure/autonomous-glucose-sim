@@ -29,6 +29,7 @@ def test_closed_loop_reduces_peak_vs_no_treatment() -> None:
         step_minutes=5,
         seed=42,
         autonomous_isf=True,
+        swarm_bolus=True,
     )
     peak_closed_loop = max(r.cgm_glucose_mgdl for r in records)
 
@@ -51,6 +52,7 @@ def test_closed_loop_delivers_nonzero_insulin() -> None:
         step_minutes=5,
         seed=42,
         autonomous_isf=True,
+        swarm_bolus=True,
     )
     assert summary.total_insulin_delivered_u > 0.5, (
         f"Expected >0.5 U total insulin, got {summary.total_insulin_delivered_u:.3f} U. "

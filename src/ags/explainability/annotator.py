@@ -55,6 +55,7 @@ def annotate_run(
     microbolus_fraction: float = 1.0,
     safety_thresholds: SafetyThresholds | None = None,
     step_minutes: int = 5,
+    swarm_bolus: bool = False,
 ) -> list[DecisionExplanation]:
     """Replay the controller and safety pipeline on ``records`` to produce one
     ``DecisionExplanation`` per timestep.
@@ -114,6 +115,7 @@ def annotate_run(
             microbolus_fraction=microbolus_fraction,
             step_minutes=step_minutes,
             prebolus_already_fired=meal_prebolus_fired,
+            swarm_bolus=swarm_bolus,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)

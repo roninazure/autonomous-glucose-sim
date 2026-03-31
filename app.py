@@ -19,8 +19,6 @@ from ags.simulation.scenarios import (
     baseline_meal_scenario,
     dawn_phenomenon_scenario,
     exercise_hypoglycemia_scenario,
-    late_correction_scenario,
-    missed_bolus_scenario,
     overnight_stability_scenario,
     rapid_drop_scenario,
     stacked_corrections_scenario,
@@ -72,15 +70,13 @@ _PUMP       = PumpConfig()
 # ── Scenario registry ─────────────────────────────────────────────────────────
 
 SCENARIOS: dict[str, object] = {
-    "Baseline Meal":          baseline_meal_scenario,
-    "Dawn Phenomenon":        dawn_phenomenon_scenario,
-    "Sustained Basal Deficit":sustained_basal_deficit_scenario,
-    "Exercise Hypoglycemia":  exercise_hypoglycemia_scenario,
-    "Missed Bolus":           missed_bolus_scenario,
-    "Late Correction":        late_correction_scenario,
-    "Overnight Stability":    overnight_stability_scenario,
-    "Stacked Corrections":    stacked_corrections_scenario,
-    "Rapid Drop":             rapid_drop_scenario,
+    "Baseline Meal":           baseline_meal_scenario,
+    "Dawn Phenomenon":         dawn_phenomenon_scenario,
+    "Sustained Basal Deficit": sustained_basal_deficit_scenario,
+    "Exercise Hypoglycemia":   exercise_hypoglycemia_scenario,
+    "Overnight Stability":     overnight_stability_scenario,
+    "Stacked Corrections":     stacked_corrections_scenario,
+    "Rapid Drop":              rapid_drop_scenario,
 }
 
 SCENARIO_DURATIONS: dict[str, int] = {
@@ -88,8 +84,6 @@ SCENARIO_DURATIONS: dict[str, int] = {
     "Dawn Phenomenon":         240,
     "Sustained Basal Deficit": 240,
     "Exercise Hypoglycemia":   120,
-    "Missed Bolus":            180,
-    "Late Correction":         180,
     "Overnight Stability":     480,
     "Stacked Corrections":     300,
     "Rapid Drop":              120,

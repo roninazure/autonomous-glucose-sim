@@ -52,7 +52,7 @@ class TestParameterBounds:
 
 class TestNamedScenarios:
     def test_all_default_pso_scenarios_present(self):
-        for name in ["Baseline Meal", "Dawn Phenomenon", "Missed Bolus"]:
+        for name in ["Baseline Meal", "Dawn Phenomenon", "Stacked Corrections"]:
             assert name in NAMED_SCENARIOS, f"'{name}' must be in NAMED_SCENARIOS"
 
     def test_scenario_objects_are_simulation_inputs(self):

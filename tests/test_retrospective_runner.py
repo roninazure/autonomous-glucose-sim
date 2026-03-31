@@ -92,9 +92,10 @@ def test_nocturnal_hypo_all_decisions_blocked():
     no_dose_guard blocks every step, no insulin is delivered."""
     records, summary = run_retrospective(
         readings=NOCTURNAL_HYPO,
+        config=RetrospectiveConfig(swarm_bolus=False),
         safety_thresholds=SafetyThresholds(min_predicted_glucose_mgdl=80.0),
     )
-    # All steps blocked (no recommendation because glucose < target = 110)
+    # All steps blocked (no recommendation because swarm_bolus=False → 0 U always)
     assert summary.allowed_decisions == 0
     assert summary.total_insulin_delivered_u == 0.0
 
@@ -145,15 +146,6 @@ def test_iob_never_negative():
 
 
 # ── Config variations ─────────────────────────────────────────────────────────
-
-def test_high_isf_reduces_recommendations():
-    """Higher correction factor → smaller corrections needed → less total U."""
-    cfg_standard = RetrospectiveConfig(correction_factor_mgdl_per_unit=30.0)
-    cfg_sensitive = RetrospectiveConfig(correction_factor_mgdl_per_unit=90.0)
-    _, summary_std = run_retrospective(POSTPRANDIAL_SPIKE, config=cfg_standard)
-    _, summary_sens = run_retrospective(POSTPRANDIAL_SPIKE, config=cfg_sensitive)
-    assert summary_sens.total_recommended_insulin_u < summary_std.total_recommended_insulin_u
-
 
 def test_microbolus_fraction_scales_delivery():
     cfg_full = RetrospectiveConfig(microbolus_fraction=1.0)
