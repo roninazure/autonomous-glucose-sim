@@ -52,4 +52,4 @@ def test_evaluate_safety_blocks_high_iob() -> None:
     assert decision.status == "blocked"
     assert decision.allowed is False
     assert decision.final_units == 0.0
-    assert decision.reason == "insulin on board exceeds safety threshold"
+    assert "IOB" in decision.reason and "dynamic ceiling" in decision.reason

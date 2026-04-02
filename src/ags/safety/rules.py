@@ -183,16 +183,59 @@ def apply_hypoglycemia_guard(
     return None
 
 
+def _dynamic_iob_ceiling(
+    roc: float,
+    acc: float,
+    jerk: float,
+    thresholds: SafetyThresholds,
+) -> float:
+    """Compute a derivative-driven IOB ceiling.
+
+    Ceiling rises proportionally to ROC (1st derivative), ACC (2nd derivative),
+    and JERK (3rd derivative) — only upward contributions count.  When glucose
+    is flat or falling all three contributions are zero and the ceiling falls
+    back to the resting base, blocking new doses against already-stacked IOB.
+
+    Clamped between dynamic_iob_base_u and max_insulin_on_board_u so the
+    absolute hard safety cap is always respected.
+    """
+    roc_contrib  = thresholds.dynamic_iob_roc_scale  * max(0.0, roc)
+    acc_contrib  = thresholds.dynamic_iob_acc_scale  * max(0.0, acc)
+    jerk_contrib = thresholds.dynamic_iob_jerk_scale * max(0.0, jerk)
+    ceiling = thresholds.dynamic_iob_base_u + roc_contrib + acc_contrib + jerk_contrib
+    return max(
+        thresholds.dynamic_iob_base_u,
+        min(ceiling, thresholds.max_insulin_on_board_u),
+    )
+
+
 def apply_iob_guard(
     inputs: SafetyInputs,
     thresholds: SafetyThresholds,
 ) -> SafetyDecision | None:
-    if inputs.insulin_on_board_u >= thresholds.max_insulin_on_board_u:
+    if thresholds.dynamic_iob_enabled:
+        ceiling = _dynamic_iob_ceiling(
+            roc=inputs.rate_mgdl_per_min,
+            acc=inputs.acceleration_mgdl_per_min2,
+            jerk=inputs.jerk_mgdl_per_min3,
+            thresholds=thresholds,
+        )
+    else:
+        ceiling = thresholds.max_insulin_on_board_u
+
+    if inputs.insulin_on_board_u >= ceiling:
         return SafetyDecision(
             status="blocked",
             allowed=False,
             final_units=0.0,
-            reason="insulin on board exceeds safety threshold",
+            reason=(
+                f"insulin on board exceeds safety threshold"
+                if not thresholds.dynamic_iob_enabled
+                else f"IOB {inputs.insulin_on_board_u:.2f}U ≥ dynamic ceiling "
+                     f"{ceiling:.2f}U (ROC {inputs.rate_mgdl_per_min:+.2f} "
+                     f"ACC {inputs.acceleration_mgdl_per_min2:+.4f} "
+                     f"JERK {inputs.jerk_mgdl_per_min3:+.5f})"
+            ),
         )
     return None
 

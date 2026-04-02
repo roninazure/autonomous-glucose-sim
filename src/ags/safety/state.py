@@ -12,6 +12,8 @@ class SafetyInputs:
     # Rate of rise and acceleration from the excursion detector
     rate_mgdl_per_min: float = 0.0
     acceleration_mgdl_per_min2: float = 0.0
+    # Third derivative of glucose (rate of change of acceleration)
+    jerk_mgdl_per_min3: float = 0.0
     # Current CGM reading (used by arming gate)
     current_glucose_mgdl: float = 0.0
     # Rolling delivery totals for SWARM interval caps
@@ -24,7 +26,24 @@ class SafetyInputs:
 @dataclass
 class SafetyThresholds:
     max_units_per_interval: float = 1.0           # per-pulse cap (matches swarm_max_pulse_u)
-    max_insulin_on_board_u: float = 2.8          # hard IOB ceiling — tuned to prevent post-meal hypo (was 6.0)
+    max_insulin_on_board_u: float = 6.0          # hard IOB ceiling — absolute safety cap
+
+    # ── Dynamic IOB ceiling (derivative-driven) ───────────────────────────────
+    # The IOB ceiling rises with glucose ROC / ACC / JERK and falls back to
+    # dynamic_iob_base_u when glucose is flat or descending.  This lets the
+    # ceiling scale automatically with patient size and insulin resistance:
+    # a fast-rising large patient gets a higher ceiling (more insulin allowed)
+    # while a flat or falling trace drops the ceiling to prevent stacking.
+    #
+    # Effective ceiling = clamp(
+    #   base + roc_scale*max(ROC,0) + acc_scale*max(ACC,0) + jerk_scale*max(JERK,0),
+    #   base, max_insulin_on_board_u
+    # )
+    dynamic_iob_enabled: bool = True
+    dynamic_iob_base_u: float = 2.0             # ceiling at zero / falling glucose
+    dynamic_iob_roc_scale: float = 1.5          # U of ceiling per mg/dL/min ROC
+    dynamic_iob_acc_scale: float = 8.0          # U of ceiling per mg/dL/min² ACC
+    dynamic_iob_jerk_scale: float = 20.0        # U of ceiling per mg/dL/min³ JERK
     min_predicted_glucose_mgdl: float = 95.0     # predict at 30 min — block earlier
     require_confirmed_trend: bool = False   # arming gate supersedes this in SWARM mode
     hypo_resume_margin_mgdl: float = 10.0

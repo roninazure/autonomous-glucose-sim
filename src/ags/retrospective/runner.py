@@ -103,6 +103,7 @@ def run_retrospective(
 
     suspend_state = SuspendState()
     arming_state = ArmingState()
+    _prev_acc_retro: float = 0.0
     records: list[TimestepRecord] = []
 
     for previous, current in zip(readings[:-1], readings[1:]):
@@ -128,11 +129,16 @@ def run_retrospective(
 
         signal, prediction, recommendation, _meal_signal = run_controller(controller_inputs)
 
+        current_acc_retro = signal.acceleration_mgdl_per_min2
+        jerk_retro = (current_acc_retro - _prev_acc_retro) / step_minutes
+        _prev_acc_retro = current_acc_retro
+
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
             prediction=prediction,
             signal=signal,
             insulin_on_board_u=step_iob_u,
+            jerk_mgdl_per_min3=jerk_retro,
         )
 
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(

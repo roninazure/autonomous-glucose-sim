@@ -87,7 +87,7 @@ def test_run_controller_with_safety_blocks_high_iob() -> None:
     assert safety_decision.status == "blocked"
     assert safety_decision.allowed is False
     assert safety_decision.final_units == 0.0
-    assert safety_decision.reason == "insulin on board exceeds safety threshold"
+    assert "IOB" in safety_decision.reason and "dynamic ceiling" in safety_decision.reason
 
 
 def test_run_controller_with_safety_blocks_low_predicted_glucose() -> None:

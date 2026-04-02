@@ -41,7 +41,7 @@ def gate_from_reason(reason: str, is_suspended: bool) -> str:
         return GATE_TREND_CONFIRMATION
     if "predicted glucose below" in reason:
         return GATE_HYPO_GUARD
-    if "insulin on board exceeds" in reason:
+    if "insulin on board exceeds" in reason or ("IOB" in reason and "dynamic ceiling" in reason):
         return GATE_IOB_GUARD
     if "clipped" in reason:
         return GATE_MAX_INTERVAL_CAP
