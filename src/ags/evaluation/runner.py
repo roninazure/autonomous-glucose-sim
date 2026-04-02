@@ -82,6 +82,11 @@ def run_evaluation(
     _2HR_STEPS   = max(1, 120 // step_minutes)  # 24 steps
     delivery_log: list[float] = []              # oldest first
 
+    # ── Jerk tracking (3rd derivative of glucose) ─────────────────────────────
+    # Jerk = (current_ACC - prev_ACC) / step_minutes.  Used by the dynamic IOB
+    # ceiling in the safety layer to raise the ceiling during acceleration bursts.
+    _prev_acc: float = 0.0
+
     # ── SWARM meal detection timer ────────────────────────────────────────────
     # Track minutes since the meal was first detected for the early push mult.
     meal_first_detected_step: int | None = None
@@ -186,6 +191,11 @@ def run_evaluation(
             if recommendation.reason.startswith(("pre-bolus | meal ONSET", "SWARM pre-bolus")):
                 meal_prebolus_fired = True
 
+        # ── Jerk (3rd derivative) ─────────────────────────────────────────────
+        current_acc = signal.acceleration_mgdl_per_min2
+        jerk = (current_acc - _prev_acc) / step_minutes
+        _prev_acc = current_acc
+
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
             prediction=prediction,
@@ -196,6 +206,7 @@ def run_evaluation(
             delivered_last_2hr_u=delivered_last_2hr,
             minutes_since_meal_detected=minutes_since_meal,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
+            jerk_mgdl_per_min3=jerk,
         )
 
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
@@ -374,6 +385,9 @@ def run_closed_loop_evaluation(
     _2HR_STEPS   = max(1, 120 // step_minutes)
     delivery_log: list[float] = []
 
+    # ── Jerk tracking (3rd derivative of glucose) ─────────────────────────────
+    _prev_acc_cl: float = 0.0
+
     # ── SWARM meal detection timer ────────────────────────────────────────────
     meal_first_detected_step: int | None = None
 
@@ -469,6 +483,11 @@ def run_closed_loop_evaluation(
             if recommendation.reason.startswith(("pre-bolus | meal ONSET", "SWARM pre-bolus")):
                 meal_prebolus_fired = True
 
+        # ── Jerk (3rd derivative) ─────────────────────────────────────────────
+        current_acc_cl = signal.acceleration_mgdl_per_min2
+        jerk_cl = (current_acc_cl - _prev_acc_cl) / step_minutes
+        _prev_acc_cl = current_acc_cl
+
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
             prediction=prediction,
@@ -479,6 +498,7 @@ def run_closed_loop_evaluation(
             delivered_last_2hr_u=delivered_last_2hr,
             minutes_since_meal_detected=minutes_since_meal,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
+            jerk_mgdl_per_min3=jerk_cl,
         )
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,

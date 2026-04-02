@@ -43,7 +43,7 @@ class TestGateFromReason:
         assert gate_from_reason("predicted glucose below safety threshold", False) == GATE_HYPO_GUARD
 
     def test_iob_guard(self):
-        assert gate_from_reason("insulin on board exceeds safety threshold", False) == GATE_IOB_GUARD
+        assert gate_from_reason("IOB 3.50U ≥ dynamic ceiling 2.00U (ROC +0.00 ACC +0.0000 JERK +0.00000)", False) == GATE_IOB_GUARD
 
     def test_max_interval_cap(self):
         assert gate_from_reason("recommendation clipped to max units per interval", False) == GATE_MAX_INTERVAL_CAP

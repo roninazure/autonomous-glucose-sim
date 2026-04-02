@@ -95,6 +95,7 @@ def annotate_run(
     # fires the pre-bolus at most once per meal event, matching the original run.
     meal_prebolus_fired = False
     meal_none_streak = 0
+    _prev_acc_ann: float = 0.0
 
     for record in records:
         current_glucose = record.cgm_glucose_mgdl
@@ -121,6 +122,10 @@ def annotate_run(
         signal, prediction, recommendation, classification = run_controller(controller_inputs)
         meal_signal = classification.meal_signal if classification else None
 
+        current_acc_ann = signal.acceleration_mgdl_per_min2
+        jerk_ann = (current_acc_ann - _prev_acc_ann) / step_minutes
+        _prev_acc_ann = current_acc_ann
+
         # Update pre-bolus state — mirrors runner logic
         if meal_signal is None or meal_signal.phase == MealPhase.NONE:
             meal_none_streak += 1
@@ -139,6 +144,7 @@ def annotate_run(
             current_glucose_mgdl=current_glucose,
             delivered_last_30min_u=record.delivered_last_30min_u,
             delivered_last_2hr_u=record.delivered_last_2hr_u,
+            jerk_mgdl_per_min3=jerk_ann,
         )
 
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
