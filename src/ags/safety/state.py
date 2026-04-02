@@ -76,8 +76,8 @@ class SafetyThresholds:
     swarm_iob_scale_bp2: float = 4.0             # <bp2 → 0.7×, ≥bp2 → 0.4×
 
     # ── SWARM interval delivery caps ─────────────────────────────────────────
-    swarm_max_per_30min_u: float = 4.0           # max delivered over rolling 30-min window (was 4.5)
-    swarm_max_per_2hr_u: float = 7.0            # max delivered over rolling 2-hr window (was 10.0)
+    swarm_max_per_30min_u: float = 3.5           # max delivered over rolling 30-min window
+    swarm_max_per_2hr_u: float = 4.5            # max delivered over rolling 2-hr window
 
     # ── SWARM early meal push ─────────────────────────────────────────────────
     swarm_early_push_multiplier: float = 2.5     # dose multiplier during early window (was 1.5)
@@ -95,7 +95,7 @@ class SafetyThresholds:
     # Main SWARM micro-bolus only fires when current glucose is at or above
     # this value.  Pre-bolus on meal ONSET and late-phase maintenance pulses
     # are exempt.  Prevents over-dosing CGM noise at euglycaemic glucose.
-    swarm_min_glucose_for_microbolus: float = 130.0   # floor when no meal active
+    swarm_min_glucose_for_microbolus: float = 155.0   # floor when no meal active
     swarm_min_glucose_during_meal: float = 120.0      # lower floor once meal is confirmed
 
     # ── Predictive safety check ───────────────────────────────────────────────
