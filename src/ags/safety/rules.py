@@ -15,11 +15,12 @@ def apply_arming_gate(
     in idle or hold phase.
 
     Priority order:
-      1. HOLD  — any hold condition → block immediately, reset state
-      2. Late-phase exception — G 140–160, flat, IOB low → allow maintenance
-      3. AGGRESSIVE — high ROC or high glucose + moderate ROC → allow
-      4. RISING — confirmed ROC ≥ 0.5 (2 steps) or ROC ≥ 0.4 + ACC > 0 → allow
-      5. IDLE  — default → block
+      1. No-meal IOB ceiling — IOB ≥ limit with no active meal → block
+      2. HOLD  — any hold condition → block immediately, reset state
+      3. Late-phase exception — G 125–175, flat, IOB low → allow maintenance
+      4. AGGRESSIVE — high ROC or high glucose + moderate ROC → allow
+      5. RISING — confirmed ROC ≥ 0.2 (1 step) or ROC ≥ 0.2 + ACC > 0 → allow
+      6. IDLE  — default → block
     """
     rate    = inputs.rate_mgdl_per_min
     accel   = inputs.acceleration_mgdl_per_min2
@@ -27,7 +28,21 @@ def apply_arming_gate(
     iob     = inputs.insulin_on_board_u
     t       = thresholds
 
-    # ── Priority 1: HOLD — suspend all dosing ────────────────────────────────
+    # ── Priority 1: No-meal IOB ceiling ──────────────────────────────────────
+    # When no food is actively absorbing (onset/peak phase not detected),
+    # block new doses if IOB exceeds the no-meal ceiling.  This prevents
+    # re-arming for brief glucose rebounds after a fast-absorbing food (e.g.
+    # OJ) finishes while residual IOB is still substantial.
+    if not inputs.meal_active and iob >= t.swarm_no_meal_max_iob_u:
+        return SafetyDecision(
+            status="blocked", allowed=False, final_units=0.0,
+            reason=(
+                f"no active meal — IOB {iob:.2f}U ≥ no-meal ceiling "
+                f"{t.swarm_no_meal_max_iob_u:.1f}U"
+            ),
+        ), ArmingState(phase="hold", steps_in_phase=0, baseline_glucose_mgdl=0.0)
+
+    # ── Priority 2: HOLD — suspend all dosing ────────────────────────────────
     steep_fall  = rate <= t.swarm_hold_roc_max                         # ROC ≤ −0.5
     fast_drop   = rate < -t.swarm_hold_drop_fast                       # drop > 2 mg/dL/min
     low_falling = (glucose <= t.swarm_hold_glucose_low and rate < 0)   # G ≤ 100 & falling
@@ -43,7 +58,7 @@ def apply_arming_gate(
             status="blocked", allowed=False, final_units=0.0, reason=reason,
         ), ArmingState(phase="hold", steps_in_phase=0, baseline_glucose_mgdl=0.0)
 
-    # ── Priority 2: Late-phase maintenance exception ─────────────────────────
+    # ── Priority 3: Late-phase maintenance exception ─────────────────────────
     # G 140–160, ROC flat (|ROC| < 0.2), IOB low — allow maintenance pulses
     # even when idle, to handle the fat/protein delayed rise.
     late_phase = (
@@ -191,20 +206,34 @@ def _dynamic_iob_ceiling(
 ) -> float:
     """Compute a derivative-driven IOB ceiling.
 
-    Ceiling rises proportionally to ROC (1st derivative), ACC (2nd derivative),
-    and JERK (3rd derivative) — only upward contributions count.  When glucose
-    is flat or falling all three contributions are zero and the ceiling falls
-    back to the resting base, blocking new doses against already-stacked IOB.
+    Ceiling rises with positive ROC (1st), positive ACC (2nd), and positive
+    JERK (3rd) — allowing more IOB when glucose is accelerating upward.
 
-    Clamped between dynamic_iob_base_u and max_insulin_on_board_u so the
-    absolute hard safety cap is always respected.
+    Negative ACC (glucose decelerating — absorption peak approaching) LOWERS
+    the ceiling using a separate, stronger scale.  This automatically adapts
+    to absorption speed:
+      - Fast food (OJ, juice): steep deceleration → ceiling collapses quickly
+        once the IOB is already substantial → blocks over-delivery
+      - Slow food (mixed meal): mild deceleration when IOB is still low → dose
+        passes the IOB guard and continues to build appropriately
+
+    Clamped between dynamic_iob_min_ceiling_u and max_insulin_on_board_u.
     """
     roc_contrib  = thresholds.dynamic_iob_roc_scale  * max(0.0, roc)
-    acc_contrib  = thresholds.dynamic_iob_acc_scale  * max(0.0, acc)
-    jerk_contrib = thresholds.dynamic_iob_jerk_scale * max(0.0, jerk)
+    # Positive ACC raises ceiling; negative ACC lowers it (separate scale)
+    if acc >= 0:
+        acc_contrib = thresholds.dynamic_iob_acc_scale * acc
+        # Jerk only counts when glucose is still accelerating upward.
+        # When ACC < 0 (decelerating — meal peak approaching), the recovery
+        # from a steep negative ACC creates a large spurious positive jerk that
+        # would otherwise overwhelm the neg-ACC penalty.  Suppress it.
+        jerk_contrib = thresholds.dynamic_iob_jerk_scale * max(0.0, jerk)
+    else:
+        acc_contrib  = thresholds.dynamic_iob_neg_acc_scale * acc  # negative → subtracts
+        jerk_contrib = 0.0  # jerk suppressed during deceleration phase
     ceiling = thresholds.dynamic_iob_base_u + roc_contrib + acc_contrib + jerk_contrib
     return max(
-        thresholds.dynamic_iob_base_u,
+        thresholds.dynamic_iob_min_ceiling_u,
         min(ceiling, thresholds.max_insulin_on_board_u),
     )
 

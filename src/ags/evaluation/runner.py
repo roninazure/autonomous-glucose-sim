@@ -196,6 +196,11 @@ def run_evaluation(
         jerk = (current_acc - _prev_acc) / step_minutes
         _prev_acc = current_acc
 
+        meal_active = (
+            meal_signal is not None
+            and meal_signal.phase in (MealPhase.ONSET, MealPhase.PEAK)
+        )
+
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
             prediction=prediction,
@@ -207,6 +212,7 @@ def run_evaluation(
             minutes_since_meal_detected=minutes_since_meal,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
             jerk_mgdl_per_min3=jerk,
+            meal_active=meal_active,
         )
 
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
@@ -488,6 +494,11 @@ def run_closed_loop_evaluation(
         jerk_cl = (current_acc_cl - _prev_acc_cl) / step_minutes
         _prev_acc_cl = current_acc_cl
 
+        meal_active_cl = (
+            meal_signal is not None
+            and meal_signal.phase in (MealPhase.ONSET, MealPhase.PEAK)
+        )
+
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
             prediction=prediction,
@@ -499,6 +510,7 @@ def run_closed_loop_evaluation(
             minutes_since_meal_detected=minutes_since_meal,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
             jerk_mgdl_per_min3=jerk_cl,
+            meal_active=meal_active_cl,
         )
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,

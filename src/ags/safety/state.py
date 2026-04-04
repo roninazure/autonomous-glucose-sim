@@ -21,6 +21,9 @@ class SafetyInputs:
     delivered_last_2hr_u: float = 0.0
     # Minutes since meal was first detected (for early meal push multiplier)
     minutes_since_meal_detected: float = 0.0
+    # True when the meal detector currently reports an active absorption phase
+    # (onset or peak).  Used to relax the no-meal IOB ceiling guard.
+    meal_active: bool = False
 
 
 @dataclass
@@ -42,7 +45,15 @@ class SafetyThresholds:
     dynamic_iob_enabled: bool = True
     dynamic_iob_base_u: float = 2.0             # ceiling at zero / falling glucose
     dynamic_iob_roc_scale: float = 1.5          # U of ceiling per mg/dL/min ROC
-    dynamic_iob_acc_scale: float = 8.0          # U of ceiling per mg/dL/min² ACC
+    dynamic_iob_acc_scale: float = 8.0          # U of ceiling per mg/dL/min² ACC (positive only)
+    # Negative ACC contribution: when glucose is decelerating (absorption ending),
+    # the ceiling is LOWERED proportionally.  A larger scale means earlier cut-off
+    # for fast-absorbing foods (OJ: ACC hits -0.7; mixed meal: mild -0.05 to -0.1).
+    # The asymmetry handles OJ vs. mixed meal automatically:
+    #   OJ at t=40: ACC=-0.69 → -20×0.69=-13.8 → ceiling drops to min_ceiling_u
+    #   Mixed meal near peak: ACC=-0.08 → -20×0.08=-1.6 → mild ceiling drop only
+    dynamic_iob_neg_acc_scale: float = 20.0     # U reduction per mg/dL/min² negative ACC
+    dynamic_iob_min_ceiling_u: float = 1.0      # hard floor for the dynamic ceiling
     dynamic_iob_jerk_scale: float = 20.0        # U of ceiling per mg/dL/min³ JERK
     min_predicted_glucose_mgdl: float = 95.0     # predict at 30 min — block earlier
     require_confirmed_trend: bool = False   # arming gate supersedes this in SWARM mode
@@ -90,6 +101,13 @@ class SafetyThresholds:
     swarm_late_phase_roc_threshold: float = 0.2  # |ROC| < this → considered flat
     swarm_late_phase_iob_max: float = 1.5        # IOB must be below this to pulse (was 0.5)
     swarm_late_phase_dose_u: float = 0.125       # maintenance pulse size (was 0.075)
+
+    # ── No-meal IOB ceiling ───────────────────────────────────────────────────
+    # When no food is actively absorbing (meal_active=False), cap IOB at this
+    # level.  Prevents stacking insulin against already-high IOB after a fast-
+    # absorbing food (e.g. OJ) finishes while the algorithm still sees rising
+    # glucose from residual absorption or CGM lag.
+    swarm_no_meal_max_iob_u: float = 2.5        # IOB ceiling when meal inactive
 
     # ── Micro-bolus glucose floor ─────────────────────────────────────────────
     # Main SWARM micro-bolus only fires when current glucose is at or above

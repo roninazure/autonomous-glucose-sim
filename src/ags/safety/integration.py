@@ -15,6 +15,7 @@ def build_safety_inputs(
     minutes_since_meal_detected: float = 0.0,
     correction_factor_mgdl_per_unit: float = 50.0,
     jerk_mgdl_per_min3: float = 0.0,
+    meal_active: bool = False,
 ) -> SafetyInputs:
     # IOB-aware pessimistic prediction: applied only in SWARM / closed-loop mode
     # (identified by the caller tracking rolling delivery windows) AND only when
@@ -45,4 +46,5 @@ def build_safety_inputs(
         delivered_last_30min_u=delivered_last_30min_u,
         delivered_last_2hr_u=delivered_last_2hr_u,
         minutes_since_meal_detected=minutes_since_meal_detected,
+        meal_active=meal_active,
     )
