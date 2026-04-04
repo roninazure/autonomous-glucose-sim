@@ -173,6 +173,8 @@ def run_evaluation(
             swarm_late_phase_dose_u=safety_thresholds.swarm_late_phase_dose_u,
             swarm_min_glucose_for_microbolus=safety_thresholds.swarm_min_glucose_for_microbolus,
             swarm_min_glucose_during_meal=safety_thresholds.swarm_min_glucose_during_meal,
+            swarm_fast_rise_roc_threshold=safety_thresholds.swarm_fast_rise_roc_threshold,
+            swarm_min_glucose_fast_rise=safety_thresholds.swarm_min_glucose_fast_rise,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)
@@ -471,6 +473,8 @@ def run_closed_loop_evaluation(
             swarm_late_phase_dose_u=safety_thresholds.swarm_late_phase_dose_u,
             swarm_min_glucose_for_microbolus=safety_thresholds.swarm_min_glucose_for_microbolus,
             swarm_min_glucose_during_meal=safety_thresholds.swarm_min_glucose_during_meal,
+            swarm_fast_rise_roc_threshold=safety_thresholds.swarm_fast_rise_roc_threshold,
+            swarm_min_glucose_fast_rise=safety_thresholds.swarm_min_glucose_fast_rise,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)

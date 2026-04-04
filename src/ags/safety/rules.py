@@ -28,7 +28,21 @@ def apply_arming_gate(
     iob     = inputs.insulin_on_board_u
     t       = thresholds
 
-    # ── Priority 1: No-meal IOB ceiling ──────────────────────────────────────
+    # ── Priority 1a: Active-meal absolute IOB ceiling ────────────────────────
+    # Even during meal absorption, stacking more than this absolute cap can
+    # cause delayed hypos — especially for fast-absorbing foods (OJ, sports
+    # drinks) where 4+ U far exceeds the carb coverage needed.  The dynamic
+    # IOB ceiling provides fine-grained control below this absolute cap.
+    if inputs.meal_active and iob >= t.swarm_active_meal_max_iob_u:
+        return SafetyDecision(
+            status="blocked", allowed=False, final_units=0.0,
+            reason=(
+                f"active meal — IOB {iob:.2f}U ≥ active-meal ceiling "
+                f"{t.swarm_active_meal_max_iob_u:.1f}U"
+            ),
+        ), ArmingState(phase="hold", steps_in_phase=0, baseline_glucose_mgdl=0.0)
+
+    # ── Priority 1b: No-meal IOB ceiling ─────────────────────────────────────
     # When no food is actively absorbing (onset/peak phase not detected),
     # block new doses if IOB exceeds the no-meal ceiling.  This prevents
     # re-arming for brief glucose rebounds after a fast-absorbing food (e.g.

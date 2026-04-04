@@ -244,11 +244,16 @@ def recommend_correction(
             and classification.meal_signal.detected
             and classification.meal_signal.estimated_carbs_g > 10.0
         )
-        active_floor = (
-            inputs.swarm_min_glucose_during_meal
-            if meal_active
-            else inputs.swarm_min_glucose_for_microbolus
-        )
+        fast_rise = roc >= inputs.swarm_fast_rise_roc_threshold
+        if meal_active:
+            active_floor = inputs.swarm_min_glucose_during_meal
+        elif fast_rise:
+            # Pre-meal fast spike (ROC ≥ threshold, meal not yet confirmed):
+            # allow early micro-bolus to get ahead of absorption lag.
+            # The no-meal IOB ceiling still guards against over-delivery.
+            active_floor = inputs.swarm_min_glucose_fast_rise
+        else:
+            active_floor = inputs.swarm_min_glucose_for_microbolus
         if glucose < active_floor:
             return CorrectionRecommendation(
                 recommended_units=0.0,

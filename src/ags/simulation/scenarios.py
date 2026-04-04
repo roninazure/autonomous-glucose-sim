@@ -126,6 +126,68 @@ def stacked_corrections_scenario() -> SimulationInputs:
     )
 
 
+def fast_carb_scenario() -> SimulationInputs:
+    """Fast-absorbing carbs — glass of orange juice or sports drink (30g).
+
+    Rapid absorption (45-min window) causes a steep glucose spike.  This is
+    the hardest scenario for reactive closed-loop: the glucose peak arrives
+    before most insulin can act.  The SWARM algorithm must detect the fast
+    ROC early and front-load aggressively to blunt the peak.
+
+    Carb impact is set lower (2.5 mg/dL/g) to model the dilution effect of
+    liquids and faster gastric emptying vs. solid food.
+    """
+    return SimulationInputs(
+        insulin_sensitivity_mgdl_per_unit=50.0,
+        carb_impact_mgdl_per_g=2.5,
+        baseline_drift_mgdl_per_step=0.0,
+        meal_events=[
+            MealEvent(timestamp_min=30, carbs_g=30.0, absorption_minutes=45),
+        ],
+    )
+
+
+def large_meal_scenario() -> SimulationInputs:
+    """Large mixed meal — 80g carbohydrates (pasta dish, rice + sides).
+
+    Represents a substantial meal.  Absorption is slower than a small meal
+    (150 min) giving the algorithm more time to respond, but the total glucose
+    load is double the baseline.  The algorithm must sustain delivery over a
+    longer window without triggering a delayed hypo.
+    """
+    return SimulationInputs(
+        insulin_sensitivity_mgdl_per_unit=50.0,
+        carb_impact_mgdl_per_g=3.0,
+        baseline_drift_mgdl_per_step=0.0,
+        meal_events=[
+            MealEvent(timestamp_min=30, carbs_g=80.0, absorption_minutes=150),
+        ],
+    )
+
+
+def slow_mixed_meal_scenario() -> SimulationInputs:
+    """High-fat / high-protein mixed meal — 50g carbs with slow absorption.
+
+    Fat and protein slow gastric emptying, extending carb absorption to 3+
+    hours.  The glucose rise is gradual but prolonged — testing the algorithm's
+    ability to sustain late-phase dosing without over-delivering early and
+    causing a post-meal hypo.
+
+    Typical example: burger with fries, pizza, or Indian curry.
+    Carb impact lower (2.5) to model the blunted glycaemic index from fat/protein
+    co-ingestion.  Absorption 150 min — slower than a simple carb meal (120 min)
+    but not as extreme as pure fat/protein delay (200+ min).
+    """
+    return SimulationInputs(
+        insulin_sensitivity_mgdl_per_unit=50.0,
+        carb_impact_mgdl_per_g=2.5,
+        baseline_drift_mgdl_per_step=0.0,
+        meal_events=[
+            MealEvent(timestamp_min=30, carbs_g=50.0, absorption_minutes=150),
+        ],
+    )
+
+
 def rapid_drop_scenario() -> SimulationInputs:
     """Rapid glucose drop simulating exercise, alcohol, or pump over-delivery.
 
