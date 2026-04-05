@@ -17,7 +17,7 @@
 ![Boundary](https://img.shields.io/badge/⬡_Boundary-Simulation_Only-ff4d6d?style=flat-square&labelColor=050a06)
 ![Python](https://img.shields.io/badge/Python-3.10+-39ff14?style=flat-square&logo=python&logoColor=39ff14&labelColor=050a06)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-ff4d6d?style=flat-square&logo=streamlit&logoColor=white&labelColor=050a06)
-![Tests](https://img.shields.io/badge/Tests-247_passing-39ff14?style=flat-square&logo=pytest&logoColor=39ff14&labelColor=050a06)
+![Tests](https://img.shields.io/badge/Tests-234_passing-39ff14?style=flat-square&logo=pytest&logoColor=39ff14&labelColor=050a06)
 
 </div>
 
@@ -26,7 +26,7 @@
 <div align="center">
 
 *Autonomous insulin delivery — CGM → Controller → Safety → Pump → Patient, no human intervention.*<br/>
-*Bergman physiology · 8-gate safety layer · 3-state arming gate · cause-aware dosing · IOB tracking · ADA/EASD clinical metrics*<br/>
+*Custom 2-compartment PK/PD · 8-gate safety layer · 4-state arming gate · cause-aware dosing · IOB tracking · ADA/EASD clinical metrics*<br/>
 *Validate the algorithm in simulation before deployment into reality.*
 
 </div>
@@ -48,7 +48,7 @@ The dashboard has two modes:
 
 | Mode | Description |
 |:--|:--|
-| **Clinical Review** | Runs all 9 evaluation scenarios automatically, scores each against ADA/EASD targets (TIR ≥70%, peak <250 mg/dL, 0 hypo steps). One-click verdict table + charts + CSV export. |
+| **Clinical Review** | Runs all evaluation scenarios automatically, scores each against ADA/EASD targets (TIR ≥70%, peak <250 mg/dL, 0 hypo steps). One-click verdict table + charts + CSV export. |
 | **Closed Loop Demo** | **The artificial pancreas loop made visible.** Select a scenario, watch the autonomous controller manage glucose with zero manual input. Glucose trajectory, insulin delivery bars, and full decision log. |
 
 ---
@@ -63,8 +63,8 @@ The dashboard has two modes:
 
 | Component | Role |
 |:--|:--|
-| **Physiology Engine** | Bergman 3-compartment model. Produces ground-truth glucose from patient params + meal events |
-| **CGM Sensor Model** | Gaussian noise, interstitial lag, calibration drift. Outputs 5-min sensor readings |
+| **Physiology Engine** | Custom linear ODE with Gamma(2,τ) meal absorption and 2-compartment matrix-exponential insulin PK/PD. Produces ground-truth glucose from patient params + meal events |
+| **CGM Sensor Model** | Gaussian noise (σ=5 mg/dL). Outputs 5-min sensor readings |
 | **Controller** | Rule-based + ML-ready decision engine. Recommends bolus / basal adjustments. RoR-tiered micro-bolus. |
 | **Safety Layer** | 3-state arming gate (monitor → armed → firing), IOB tracking, hypo prediction, stateful suspension, hard clamps. 8 gates in series at every step |
 | **Pump Abstraction** | Delivery rate limits, dual-wave (split) bolus state machine, quantisation |
@@ -128,19 +128,19 @@ The longer the system runs with a patient, the more precisely it knows their rea
 ### 7 · Basal Drift Detection (Fixed)
 The basal drift detector uses a 60-minute sliding window and requires ≥6 CGM readings for a reliable R² linearity test. The CGM history window in the runner was previously set to 5 — **one reading short**, meaning drift detection never fired in production. Fixed to 12 readings (matching the detector's full look-back). A new **Sustained Basal Deficit** simulation scenario (0.30 mg/dL/min constant drift, no meal) provides the canonical end-to-end validation path for the `BASAL_DRIFT` detection and correction loop.
 
-### 8 · 3-State Arming Gate (Doctor-Specified)
+### 8 · 4-State Arming Gate (Doctor-Specified)
 Runs as **Gate 0**, before all other safety checks. Ensures the controller only delivers insulin when a genuine glucose excursion is confirmed — not transient sensor noise or a single rising CGM tick.
 
-| Phase | Slope | Duration | Action |
-|:--|:--|:--|:--|
-| **MONITORING** | 0.3–0.5 mg/dL/min | — | Watch only, no dose |
-| **ARMED** | ≥ 0.5 mg/dL/min | 1 step (5 min) | Primed, no dose yet |
-| **FIRING** | ≥ 0.7 mg/dL/min | 2 steps (10 min) **or** cumulative rise ≥ 5 mg/dL | Dose allowed |
-| **HOLD → reset** | < 0.3, any negative slope, or drop > 3 mg/dL/min | any | Return to MONITORING |
+| Phase | Condition | Action |
+|:--|:--|:--|
+| **IDLE** | Default — no confirmed rise | Block all dosing |
+| **RISING** | ROC ≥ 0.4 with positive ACC, or ROC ≥ 0.5 sustained | Allow dosing |
+| **AGGRESSIVE** | ROC ≥ 1.0, or G ≥ 130 with ROC ≥ 0.6 | Allow dosing, higher urgency |
+| **HOLD** | ROC ≤ −0.5, drop > 2 mg/dL/min, or G ≤ 100 falling | Suspend all dosing |
 
-Acceleration reversal while FIRING also triggers a HOLD reset. The gate resets to MONITORING on hypo suspension entry and after hypo recovery — the system must re-confirm a genuine rise before dosing again.
+Additional IOB ceilings gate before phase evaluation: 3.8U during active meal (fast rise), 6.0U during large slow meal or true hyperglycemia (>180 mg/dL), 2.0U when no meal is detected.
 
-The arming phase (`MONITORING` / `ARMED` / `FIRING`) is tracked per-step and visible in the **Arm Phase** column of the Controller Decision Log.
+The arming phase (`idle` / `rising` / `aggressive` / `hold`) is tracked per-step and visible in the **Arm Phase** column of the Controller Decision Log.
 
 ---
 
@@ -253,7 +253,7 @@ src/
     ├── explainability/   <- DecisionExplanation · gate annotator · narrative generator
     └── core/             <- startup config · print summary
 
-tests/                    <- 247 tests, all passing
+tests/                    <- 234 tests, all passing
 docs/                     <- quick_reference.md · user_guide.md
 app.py                    <- Streamlit dashboard (Clinical Review · Closed Loop Demo)
 ```
@@ -267,11 +267,11 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <details>
 <summary><b>01 · Algorithm Validation ✓</b></summary>
 <br/>
-- 9 evaluation scenarios covering hypo, hyper, drift, exercise, overnight, stacked corrections, late correction, sustained basal deficit<br/>
+- 8 evaluation scenarios covering hypo, hyper, drift, exercise, overnight, stacked corrections, rapid drop, sustained basal deficit<br/>
 - ADA/EASD pass criteria enforced: TIR ≥70%, peak <250 mg/dL, 0 hypo steps<br/>
-- 247 automated tests, all passing<br/>
+- 234 automated tests, all passing<br/>
 - Cause-aware dosing: MEAL / BASAL_DRIFT / REBOUND / MIXED / FLAT detection + distinct strategies<br/>
-- Doctor-specified 3-state arming gate (monitor → armed → firing) validated across all 9 scenarios
+- Doctor-specified 4-state arming gate (idle → rising → aggressive → hold) validated across all scenarios
 </details>
 
 <details>
@@ -297,7 +297,7 @@ Built from day one for a future **Software as a Medical Device (SaMD)** classifi
 <br/>
 - **Closed-loop demo** with real physiological feedback — delivered insulin changes the glucose trajectory<br/>
 - **Clinical Review** mode: one-click full battery with ADA/EASD verdict table and CSV export<br/>
-- 9 scenarios validated: baseline meal, dawn phenomenon, overnight stability, stacked corrections, rapid drop, exercise, missed bolus, late correction, sustained basal deficit
+- 8 scenarios validated: baseline meal, overnight stability, stacked corrections, rapid drop, exercise hypoglycemia, sustained basal deficit, fast carb (OJ), large mixed meal
 </details>
 
 <details>
