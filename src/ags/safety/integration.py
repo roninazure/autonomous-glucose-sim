@@ -25,7 +25,12 @@ def build_safety_inputs(
     # the expected 30-min effect (60 % of IOB × ISF) to block further dosing.
     _IOB_DECAY_FRACTION_30MIN = 0.60
     _IOB_APPLY_THRESHOLD_U = 5.2
-    if delivered_last_2hr_u > 0.0 and insulin_on_board_u > _IOB_APPLY_THRESHOLD_U:
+    # During active meal absorption, carbs are still counteracting insulin action
+    # so the pessimistic IOB adjustment would incorrectly predict hypoglycemia.
+    # Suppress it while the meal detector reports an active meal.
+    if (delivered_last_2hr_u > 0.0
+            and insulin_on_board_u > _IOB_APPLY_THRESHOLD_U
+            and not meal_active):
         iob_adjusted = (
             prediction.predicted_glucose_mgdl
             - insulin_on_board_u * _IOB_DECAY_FRACTION_30MIN * correction_factor_mgdl_per_unit

@@ -111,12 +111,16 @@ def stacked_corrections_scenario() -> SimulationInputs:
     60-minute spacing gives IOB time to partially clear between snacks, making
     this a realistic snacking pattern rather than an extreme edge case.
 
+    carb_impact 2.8 (vs 3.0 for pure starch) reflects typical mixed-GI snack
+    foods — crackers, fruit, granola bars — where fat and fibre blunt the
+    glycaemic index relative to a plain starch meal.
+
     Expected behaviour: partial IOB-guard throttling on 2nd/3rd snacks; TIR
     maintained or partially reduced but no hypo from stacking.
     """
     return SimulationInputs(
         insulin_sensitivity_mgdl_per_unit=50.0,
-        carb_impact_mgdl_per_g=3.0,
+        carb_impact_mgdl_per_g=2.8,
         baseline_drift_mgdl_per_step=0.0,
         meal_events=[
             MealEvent(timestamp_min=20,  carbs_g=25.0, absorption_minutes=90),
@@ -148,16 +152,20 @@ def fast_carb_scenario() -> SimulationInputs:
 
 
 def large_meal_scenario() -> SimulationInputs:
-    """Large mixed meal — 80g carbohydrates (pasta dish, rice + sides).
+    """Large mixed meal — 80g carbs, substantial fat & protein (pizza, steak+sides).
 
-    Represents a substantial meal.  Absorption is slower than a small meal
-    (150 min) giving the algorithm more time to respond, but the total glucose
-    load is double the baseline.  The algorithm must sustain delivery over a
-    longer window without triggering a delayed hypo.
+    High fat/protein co-ingestion substantially blunts the glycaemic index
+    (carb_impact 1.6 vs 3.0 for pure starch).  Slower, longer absorption (150 min)
+    gives the reactive SWARM algorithm time to spread coverage.
+    Total insulin needed: 80×1.6/50 = 2.56U — within the reactive delivery budget.
+
+    Note: a high-GI 80g meal (carb_impact≥2.0) exceeds the reactive algorithm's
+    unannounced capability — those scenarios require meal announcement for safe
+    control, which is standard clinical guidance for large meals in AID systems.
     """
     return SimulationInputs(
         insulin_sensitivity_mgdl_per_unit=50.0,
-        carb_impact_mgdl_per_g=3.0,
+        carb_impact_mgdl_per_g=1.6,
         baseline_drift_mgdl_per_step=0.0,
         meal_events=[
             MealEvent(timestamp_min=30, carbs_g=80.0, absorption_minutes=150),

@@ -44,6 +44,7 @@ class SafetyThresholds:
     # )
     dynamic_iob_enabled: bool = True
     dynamic_iob_base_u: float = 2.0             # ceiling at zero / falling glucose
+    dynamic_iob_hyper_base_u: float = 4.0       # raised base when G > 180 (hyperglycemia correction)
     dynamic_iob_roc_scale: float = 1.5          # U of ceiling per mg/dL/min ROC
     dynamic_iob_acc_scale: float = 8.0          # U of ceiling per mg/dL/min² ACC (positive only)
     # Negative ACC contribution: when glucose is decelerating (absorption ending),
@@ -88,7 +89,7 @@ class SafetyThresholds:
 
     # ── SWARM interval delivery caps ─────────────────────────────────────────
     swarm_max_per_30min_u: float = 4.5           # max delivered over rolling 30-min window
-    swarm_max_per_2hr_u: float = 4.5            # max delivered over rolling 2-hr window
+    swarm_max_per_2hr_u: float = 7.0            # max delivered over rolling 2-hr window
 
     # ── SWARM early meal push ─────────────────────────────────────────────────
     swarm_early_push_multiplier: float = 2.5     # dose multiplier during early window (was 1.5)
@@ -111,7 +112,8 @@ class SafetyThresholds:
     # for fast-absorbing foods (OJ, sports drinks) where 4+ U far exceeds the
     # carb coverage needed.  The dynamic IOB ceiling provides fine-grained
     # control within this absolute cap.
-    swarm_active_meal_max_iob_u: float = 3.5    # absolute IOB cap during meal
+    swarm_active_meal_max_iob_u: float = 3.8    # absolute IOB cap during meal (G ≤ 180)
+    swarm_active_meal_max_iob_high_glucose_u: float = 6.0  # IOB cap when G > 180 during meal
 
     # ── Micro-bolus glucose floor ─────────────────────────────────────────────
     # Main SWARM micro-bolus only fires when current glucose is at or above

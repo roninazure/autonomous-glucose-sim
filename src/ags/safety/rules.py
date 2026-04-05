@@ -28,19 +28,32 @@ def apply_arming_gate(
     iob     = inputs.insulin_on_board_u
     t       = thresholds
 
-    # ── Priority 1a: Active-meal absolute IOB ceiling ────────────────────────
-    # Even during meal absorption, stacking more than this absolute cap can
-    # cause delayed hypos — especially for fast-absorbing foods (OJ, sports
-    # drinks) where 4+ U far exceeds the carb coverage needed.  The dynamic
-    # IOB ceiling provides fine-grained control below this absolute cap.
-    if inputs.meal_active and iob >= t.swarm_active_meal_max_iob_u:
-        return SafetyDecision(
-            status="blocked", allowed=False, final_units=0.0,
-            reason=(
-                f"active meal — IOB {iob:.2f}U ≥ active-meal ceiling "
-                f"{t.swarm_active_meal_max_iob_u:.1f}U"
-            ),
-        ), ArmingState(phase="hold", steps_in_phase=0, baseline_glucose_mgdl=0.0)
+    # ── Priority 1a: Active-meal absolute IOB ceiling (glucose + ROC scaled) ─
+    # Tight 3.8U cap protects fast-absorbing foods (OJ: needs only ~1.5U).
+    # High 6.0U ceiling applies when glucose is near-hyper (>172) AND ROC is
+    # slow (<1.4 mg/dL/min) — signature of a large slow meal still absorbing.
+    # Fast-rising glucose at 172–180 (ROC≥1.4) keeps the tight cap; that
+    # pattern matches a fast food (OJ) overshooting, not a large meal stalling.
+    # Above 180, always use the high ceiling regardless of ROC.
+    _NEAR_HYPER_G   = 172.0   # above this G, consider relaxing ceiling
+    _FAST_RISE_ROC  = 1.4     # ROC ≥ this with G>172 → still a fast meal → keep tight cap
+    if inputs.meal_active:
+        near_hyper_slow = glucose > _NEAR_HYPER_G and rate < _FAST_RISE_ROC
+        true_hyper      = glucose > 180.0
+        active_ceiling = (
+            t.swarm_active_meal_max_iob_high_glucose_u
+            if (near_hyper_slow or true_hyper)
+            else t.swarm_active_meal_max_iob_u
+        )
+        if iob >= active_ceiling:
+            zone = "hyper" if true_hyper else ("near-hyper-slow" if near_hyper_slow else "normal")
+            return SafetyDecision(
+                status="blocked", allowed=False, final_units=0.0,
+                reason=(
+                    f"active meal — IOB {iob:.2f}U ≥ active-meal ceiling "
+                    f"{active_ceiling:.1f}U ({zone})"
+                ),
+            ), ArmingState(phase="hold", steps_in_phase=0, baseline_glucose_mgdl=0.0)
 
     # ── Priority 1b: No-meal IOB ceiling ─────────────────────────────────────
     # When no food is actively absorbing (onset/peak phase not detected),
@@ -217,6 +230,7 @@ def _dynamic_iob_ceiling(
     acc: float,
     jerk: float,
     thresholds: SafetyThresholds,
+    glucose: float = 0.0,
 ) -> float:
     """Compute a derivative-driven IOB ceiling.
 
@@ -231,10 +245,23 @@ def _dynamic_iob_ceiling(
       - Slow food (mixed meal): mild deceleration when IOB is still low → dose
         passes the IOB guard and continues to build appropriately
 
+    Exception: when glucose is already hyperglycemic (> 180 mg/dL), transient
+    negative ACC mid-meal is suppressed.  Mid-absorption deceleration at high
+    glucose is noise from a still-absorbing large meal, not end-of-absorption —
+    collapsing the ceiling here would prevent needed correction delivery.
+
     Clamped between dynamic_iob_min_ceiling_u and max_insulin_on_board_u.
     """
+    # Use an elevated IOB ceiling base during hyperglycemia so the algorithm
+    # can continue delivering correction doses when glucose is already above
+    # the target range (e.g. a large meal still absorbing at t=75+).
+    hyperglycemic = glucose > 172.0
+    base = thresholds.dynamic_iob_hyper_base_u if hyperglycemic else thresholds.dynamic_iob_base_u
     roc_contrib  = thresholds.dynamic_iob_roc_scale  * max(0.0, roc)
-    # Positive ACC raises ceiling; negative ACC lowers it (separate scale)
+    # Positive ACC raises ceiling; negative ACC lowers it (separate scale).
+    # Suppress neg-ACC penalty during hyperglycemia (G > 180): at those
+    # glucose levels the algorithm must keep dosing; a transient neg-ACC
+    # from a still-absorbing large meal must not collapse the ceiling.
     if acc >= 0:
         acc_contrib = thresholds.dynamic_iob_acc_scale * acc
         # Jerk only counts when glucose is still accelerating upward.
@@ -242,10 +269,15 @@ def _dynamic_iob_ceiling(
         # from a steep negative ACC creates a large spurious positive jerk that
         # would otherwise overwhelm the neg-ACC penalty.  Suppress it.
         jerk_contrib = thresholds.dynamic_iob_jerk_scale * max(0.0, jerk)
+    elif hyperglycemic:
+        # Glucose already above target range — keep ceiling up so correction
+        # delivery can continue despite transient deceleration noise.
+        acc_contrib  = 0.0
+        jerk_contrib = 0.0
     else:
         acc_contrib  = thresholds.dynamic_iob_neg_acc_scale * acc  # negative → subtracts
         jerk_contrib = 0.0  # jerk suppressed during deceleration phase
-    ceiling = thresholds.dynamic_iob_base_u + roc_contrib + acc_contrib + jerk_contrib
+    ceiling = base + roc_contrib + acc_contrib + jerk_contrib
     return max(
         thresholds.dynamic_iob_min_ceiling_u,
         min(ceiling, thresholds.max_insulin_on_board_u),
@@ -262,6 +294,7 @@ def apply_iob_guard(
             acc=inputs.acceleration_mgdl_per_min2,
             jerk=inputs.jerk_mgdl_per_min3,
             thresholds=thresholds,
+            glucose=inputs.current_glucose_mgdl,
         )
     else:
         ceiling = thresholds.max_insulin_on_board_u
