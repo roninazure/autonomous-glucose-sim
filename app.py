@@ -17,7 +17,6 @@ from ags.pump.state import PumpConfig
 from ags.safety.state import SafetyThresholds
 from ags.simulation.scenarios import (
     baseline_meal_scenario,
-    dawn_phenomenon_scenario,
     exercise_hypoglycemia_scenario,
     overnight_stability_scenario,
     rapid_drop_scenario,
@@ -71,7 +70,6 @@ _PUMP       = PumpConfig()
 
 SCENARIOS: dict[str, object] = {
     "Baseline Meal":           baseline_meal_scenario,
-    "Dawn Phenomenon":         dawn_phenomenon_scenario,
     "Sustained Basal Deficit": sustained_basal_deficit_scenario,
     "Exercise Hypoglycemia":   exercise_hypoglycemia_scenario,
     "Overnight Stability":     overnight_stability_scenario,
@@ -81,7 +79,6 @@ SCENARIOS: dict[str, object] = {
 
 SCENARIO_DURATIONS: dict[str, int] = {
     "Baseline Meal":           240,
-    "Dawn Phenomenon":         240,
     "Sustained Basal Deficit": 240,
     "Exercise Hypoglycemia":   120,
     "Overnight Stability":     480,

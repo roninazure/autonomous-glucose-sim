@@ -52,7 +52,7 @@ class TestParameterBounds:
 
 class TestNamedScenarios:
     def test_all_default_pso_scenarios_present(self):
-        for name in ["Baseline Meal", "Dawn Phenomenon", "Stacked Corrections"]:
+        for name in ["Baseline Meal", "Stacked Corrections"]:
             assert name in NAMED_SCENARIOS, f"'{name}' must be in NAMED_SCENARIOS"
 
     def test_scenario_objects_are_simulation_inputs(self):
@@ -203,7 +203,7 @@ class TestRunPso:
         cfg = PSOConfig(
             n_particles=3,
             n_iterations=2,
-            scenario_names=["Baseline Meal", "Dawn Phenomenon"],
+            scenario_names=["Baseline Meal", "Stacked Corrections"],
             seed=0,
         )
         result = run_pso(config=cfg)

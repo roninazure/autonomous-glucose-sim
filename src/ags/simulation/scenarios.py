@@ -22,21 +22,6 @@ def baseline_meal_scenario() -> SimulationInputs:
     )
 
 
-def dawn_phenomenon_scenario() -> SimulationInputs:
-    """Gradual glucose rise from 3–7 AM driven by cortisol/growth hormone.
-
-    No meal event. Positive baseline drift simulates the liver dumping glucose.
-    The controller must detect the slow rise and intervene without a meal bolus
-    trigger — a common failure mode in rule-based systems.
-    """
-    return SimulationInputs(
-        insulin_sensitivity_mgdl_per_unit=55.0,
-        carb_impact_mgdl_per_g=3.0,
-        baseline_drift_mgdl_per_step=0.8,  # ~10 mg/dL rise per hour
-        meal_events=[],
-    )
-
-
 def sustained_basal_deficit_scenario() -> SimulationInputs:
     """Slow linear glucose rise from chronically insufficient background insulin.
 

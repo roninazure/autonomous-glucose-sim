@@ -1,30 +1,12 @@
-"""Tests for the four new clinical scenarios."""
+"""Tests for clinical scenarios."""
 from __future__ import annotations
 
 import pytest
 
 from ags.simulation.scenarios import (
-    dawn_phenomenon_scenario,
     exercise_hypoglycemia_scenario,
 )
 from ags.simulation.engine import run_simulation
-
-
-def test_dawn_phenomenon_has_no_meals():
-    inputs = dawn_phenomenon_scenario()
-    assert inputs.meal_events == []
-
-
-def test_dawn_phenomenon_positive_drift():
-    inputs = dawn_phenomenon_scenario()
-    assert inputs.baseline_drift_mgdl_per_step > 0, "Dawn scenario must have positive drift"
-
-
-def test_dawn_phenomenon_glucose_rises():
-    inputs = dawn_phenomenon_scenario()
-    snapshots = run_simulation(inputs, duration_minutes=120, step_minutes=5)
-    # Glucose should be higher at end than start because of cortisol drift
-    assert snapshots[-1].true_glucose_mgdl > snapshots[0].true_glucose_mgdl
 
 
 def test_exercise_hypo_has_no_meals():
