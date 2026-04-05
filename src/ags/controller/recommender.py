@@ -84,7 +84,11 @@ def _swarm_micro_bolus(
     """
     f_g   = _glucose_scale(glucose)
     f_iob = _iob_scale(iob, bp1=iob_bp1, bp2=iob_bp2)
-    raw   = u_base * (1.0 + a * roc + b * acc) * f_g * f_iob
+    # When already hyperglycemic (G > 180), transient negative ACC mid-meal
+    # must not zero out the dose.  Clamp ACC to 0 for the formula so the
+    # ROC term (still positive) keeps delivery going.
+    acc_for_formula = 0.0 if (acc < 0 and glucose > 172.0) else acc
+    raw   = u_base * (1.0 + a * roc + b * acc_for_formula) * f_g * f_iob
 
     push_label = ""
     if early_push and raw > 0:
@@ -244,11 +248,16 @@ def recommend_correction(
             and classification.meal_signal.detected
             and classification.meal_signal.estimated_carbs_g > 10.0
         )
-        active_floor = (
-            inputs.swarm_min_glucose_during_meal
-            if meal_active
-            else inputs.swarm_min_glucose_for_microbolus
-        )
+        fast_rise = roc >= inputs.swarm_fast_rise_roc_threshold
+        if meal_active:
+            active_floor = inputs.swarm_min_glucose_during_meal
+        elif fast_rise:
+            # Pre-meal fast spike (ROC ≥ threshold, meal not yet confirmed):
+            # allow early micro-bolus to get ahead of absorption lag.
+            # The no-meal IOB ceiling still guards against over-delivery.
+            active_floor = inputs.swarm_min_glucose_fast_rise
+        else:
+            active_floor = inputs.swarm_min_glucose_for_microbolus
         if glucose < active_floor:
             return CorrectionRecommendation(
                 recommended_units=0.0,

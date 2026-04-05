@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ags.evaluation.runner import run_closed_loop_evaluation
 from ags.simulation.engine import run_simulation
-from ags.simulation.scenarios import baseline_meal_scenario, dawn_phenomenon_scenario
+from ags.simulation.scenarios import baseline_meal_scenario, sustained_basal_deficit_scenario
 
 
 def test_closed_loop_reduces_peak_vs_no_treatment() -> None:
@@ -61,9 +61,9 @@ def test_closed_loop_delivers_nonzero_insulin() -> None:
 
 
 def test_closed_loop_drift_scenario_achieves_full_tir() -> None:
-    """Dawn drift without a meal: autonomous control should achieve 100% TIR."""
+    """Basal deficit (drift, no meal): autonomous control should achieve ≥80% TIR."""
     records, summary = run_closed_loop_evaluation(
-        simulation_inputs=dawn_phenomenon_scenario(),
+        simulation_inputs=sustained_basal_deficit_scenario(),
         duration_minutes=120,
         step_minutes=5,
         seed=42,

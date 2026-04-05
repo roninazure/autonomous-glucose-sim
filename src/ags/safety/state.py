@@ -21,6 +21,9 @@ class SafetyInputs:
     delivered_last_2hr_u: float = 0.0
     # Minutes since meal was first detected (for early meal push multiplier)
     minutes_since_meal_detected: float = 0.0
+    # True when the meal detector currently reports an active absorption phase
+    # (onset or peak).  Used to relax the no-meal IOB ceiling guard.
+    meal_active: bool = False
 
 
 @dataclass
@@ -41,8 +44,17 @@ class SafetyThresholds:
     # )
     dynamic_iob_enabled: bool = True
     dynamic_iob_base_u: float = 2.0             # ceiling at zero / falling glucose
+    dynamic_iob_hyper_base_u: float = 4.0       # raised base when G > 180 (hyperglycemia correction)
     dynamic_iob_roc_scale: float = 1.5          # U of ceiling per mg/dL/min ROC
-    dynamic_iob_acc_scale: float = 8.0          # U of ceiling per mg/dL/min² ACC
+    dynamic_iob_acc_scale: float = 8.0          # U of ceiling per mg/dL/min² ACC (positive only)
+    # Negative ACC contribution: when glucose is decelerating (absorption ending),
+    # the ceiling is LOWERED proportionally.  A larger scale means earlier cut-off
+    # for fast-absorbing foods (OJ: ACC hits -0.7; mixed meal: mild -0.05 to -0.1).
+    # The asymmetry handles OJ vs. mixed meal automatically:
+    #   OJ at t=40: ACC=-0.69 → -20×0.69=-13.8 → ceiling drops to min_ceiling_u
+    #   Mixed meal near peak: ACC=-0.08 → -20×0.08=-1.6 → mild ceiling drop only
+    dynamic_iob_neg_acc_scale: float = 12.0     # U reduction per mg/dL/min² negative ACC
+    dynamic_iob_min_ceiling_u: float = 1.0      # hard floor for the dynamic ceiling
     dynamic_iob_jerk_scale: float = 20.0        # U of ceiling per mg/dL/min³ JERK
     min_predicted_glucose_mgdl: float = 95.0     # predict at 30 min — block earlier
     require_confirmed_trend: bool = False   # arming gate supersedes this in SWARM mode
@@ -76,8 +88,8 @@ class SafetyThresholds:
     swarm_iob_scale_bp2: float = 4.0             # <bp2 → 0.7×, ≥bp2 → 0.4×
 
     # ── SWARM interval delivery caps ─────────────────────────────────────────
-    swarm_max_per_30min_u: float = 3.5           # max delivered over rolling 30-min window
-    swarm_max_per_2hr_u: float = 4.5            # max delivered over rolling 2-hr window
+    swarm_max_per_30min_u: float = 4.5           # max delivered over rolling 30-min window
+    swarm_max_per_2hr_u: float = 7.0            # max delivered over rolling 2-hr window
 
     # ── SWARM early meal push ─────────────────────────────────────────────────
     swarm_early_push_multiplier: float = 2.5     # dose multiplier during early window (was 1.5)
@@ -91,12 +103,30 @@ class SafetyThresholds:
     swarm_late_phase_iob_max: float = 1.5        # IOB must be below this to pulse (was 0.5)
     swarm_late_phase_dose_u: float = 0.125       # maintenance pulse size (was 0.075)
 
+    # ── IOB ceilings (meal-aware) ─────────────────────────────────────────────
+    # No-meal ceiling: when meal_active=False, cap IOB at this level.
+    # Prevents re-arming against already-high IOB after fast food finishes.
+    swarm_no_meal_max_iob_u: float = 2.0        # IOB ceiling when meal inactive
+    # Active-meal ceiling: hard cap during meal absorption.  Even when a meal
+    # is detected, stacking more than this can cause delayed hypos — especially
+    # for fast-absorbing foods (OJ, sports drinks) where 4+ U far exceeds the
+    # carb coverage needed.  The dynamic IOB ceiling provides fine-grained
+    # control within this absolute cap.
+    swarm_active_meal_max_iob_u: float = 3.8    # absolute IOB cap during meal (G ≤ 180)
+    swarm_active_meal_max_iob_high_glucose_u: float = 6.0  # IOB cap when G > 180 during meal
+
     # ── Micro-bolus glucose floor ─────────────────────────────────────────────
     # Main SWARM micro-bolus only fires when current glucose is at or above
     # this value.  Pre-bolus on meal ONSET and late-phase maintenance pulses
     # are exempt.  Prevents over-dosing CGM noise at euglycaemic glucose.
     swarm_min_glucose_for_microbolus: float = 155.0   # floor when no meal active
     swarm_min_glucose_during_meal: float = 120.0      # lower floor once meal is confirmed
+    # Fast-rise floor override: when ROC ≥ this threshold AND no meal detected yet,
+    # the floor drops to swarm_min_glucose_fast_rise to allow early delivery before
+    # the meal detector fires.  Only active for ROC well above normal noise
+    # (≥ 1.5 mg/dL/min) so overnight / basal fluctuations don't trigger it.
+    swarm_fast_rise_roc_threshold: float = 2.6        # ROC floor override trigger
+    swarm_min_glucose_fast_rise: float = 112.0        # floor during fast pre-meal rise
 
     # ── Predictive safety check ───────────────────────────────────────────────
     # Predicted_G = G + ROC × horizon — if below this floor, no dose

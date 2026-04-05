@@ -15,6 +15,7 @@ def build_safety_inputs(
     minutes_since_meal_detected: float = 0.0,
     correction_factor_mgdl_per_unit: float = 50.0,
     jerk_mgdl_per_min3: float = 0.0,
+    meal_active: bool = False,
 ) -> SafetyInputs:
     # IOB-aware pessimistic prediction: applied only in SWARM / closed-loop mode
     # (identified by the caller tracking rolling delivery windows) AND only when
@@ -24,7 +25,12 @@ def build_safety_inputs(
     # the expected 30-min effect (60 % of IOB × ISF) to block further dosing.
     _IOB_DECAY_FRACTION_30MIN = 0.60
     _IOB_APPLY_THRESHOLD_U = 5.2
-    if delivered_last_2hr_u > 0.0 and insulin_on_board_u > _IOB_APPLY_THRESHOLD_U:
+    # During active meal absorption, carbs are still counteracting insulin action
+    # so the pessimistic IOB adjustment would incorrectly predict hypoglycemia.
+    # Suppress it while the meal detector reports an active meal.
+    if (delivered_last_2hr_u > 0.0
+            and insulin_on_board_u > _IOB_APPLY_THRESHOLD_U
+            and not meal_active):
         iob_adjusted = (
             prediction.predicted_glucose_mgdl
             - insulin_on_board_u * _IOB_DECAY_FRACTION_30MIN * correction_factor_mgdl_per_unit
@@ -45,4 +51,5 @@ def build_safety_inputs(
         delivered_last_30min_u=delivered_last_30min_u,
         delivered_last_2hr_u=delivered_last_2hr_u,
         minutes_since_meal_detected=minutes_since_meal_detected,
+        meal_active=meal_active,
     )

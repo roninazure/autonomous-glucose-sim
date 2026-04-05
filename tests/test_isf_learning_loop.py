@@ -7,25 +7,35 @@ The runner should:
 4. Surface the observation count on each TimestepRecord.
 5. Pass the growing list into ControllerInputs so the recommender can use it.
 
-The dawn_phenomenon_scenario (slow drift, no meal) is used because the drift
-creates a sustained correction need while insulin action has time to produce a
-measurable glucose drop before the next dose arrives.  A large meal scenario
-is unsuitable because carb absorption dominates glucose for 90+ minutes,
+The sustained_basal_deficit_scenario (slow drift, no meal) is used because the
+drift creates a sustained correction need while insulin action has time to
+produce a measurable glucose drop before the next dose arrives.  A large meal
+scenario is unsuitable because carb absorption dominates glucose for 90+ minutes,
 making dose→response attribution unreliable within the 60-min window.
 """
 from __future__ import annotations
 
 from ags.evaluation.runner import run_evaluation
-from ags.simulation.scenarios import dawn_phenomenon_scenario
+from ags.simulation.state import SimulationInputs
+
+
+# Gentle drift (no meal) — creates sustained corrections without overwhelming
+# the ISF attribution window.  Not a named clinical scenario; used only here.
+_DRIFT_INPUTS = SimulationInputs(
+    insulin_sensitivity_mgdl_per_unit=55.0,
+    carb_impact_mgdl_per_g=3.0,
+    baseline_drift_mgdl_per_step=0.8,
+    meal_events=[],
+)
 
 
 def test_isf_observation_count_grows_after_observations_mature() -> None:
-    """Dawn drift scenario (360 min): isf_observation_count should be >0.
+    """Gentle drift (360 min): isf_observation_count should be >0.
 
     First corrections land around t=35 min and mature at t=95 min.
     With a 6-hour run, several dose→response pairs should accumulate.
     """
-    simulation_inputs = dawn_phenomenon_scenario()
+    simulation_inputs = _DRIFT_INPUTS
 
     records, _ = run_evaluation(
         simulation_inputs=simulation_inputs,
@@ -54,7 +64,7 @@ def test_isf_observation_count_grows_after_observations_mature() -> None:
 def test_isf_observation_count_non_decreasing() -> None:
     """Observation count should only grow within a single run."""
     records, _ = run_evaluation(
-        simulation_inputs=dawn_phenomenon_scenario(),
+        simulation_inputs=_DRIFT_INPUTS,
         duration_minutes=360,
         step_minutes=5,
         seed=42,
@@ -74,7 +84,7 @@ def test_isf_observation_count_non_decreasing() -> None:
 def test_recommendation_reason_surfaced_in_record() -> None:
     """recommendation_reason field should be non-empty for every timestep."""
     records, _ = run_evaluation(
-        simulation_inputs=dawn_phenomenon_scenario(),
+        simulation_inputs=_DRIFT_INPUTS,
         duration_minutes=60,
         step_minutes=5,
         seed=42,

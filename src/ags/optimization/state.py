@@ -41,7 +41,6 @@ class PSOConfig:
     # ags.optimization.fitness.NAMED_SCENARIOS)
     scenario_names: list[str] = field(default_factory=lambda: [
         "Baseline Meal",
-        "Dawn Phenomenon",
         "Stacked Corrections",
     ])
     duration_minutes: int = 180

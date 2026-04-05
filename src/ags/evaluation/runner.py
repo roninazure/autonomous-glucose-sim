@@ -173,6 +173,8 @@ def run_evaluation(
             swarm_late_phase_dose_u=safety_thresholds.swarm_late_phase_dose_u,
             swarm_min_glucose_for_microbolus=safety_thresholds.swarm_min_glucose_for_microbolus,
             swarm_min_glucose_during_meal=safety_thresholds.swarm_min_glucose_during_meal,
+            swarm_fast_rise_roc_threshold=safety_thresholds.swarm_fast_rise_roc_threshold,
+            swarm_min_glucose_fast_rise=safety_thresholds.swarm_min_glucose_fast_rise,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)
@@ -196,6 +198,11 @@ def run_evaluation(
         jerk = (current_acc - _prev_acc) / step_minutes
         _prev_acc = current_acc
 
+        meal_active = (
+            meal_signal is not None
+            and meal_signal.phase in (MealPhase.ONSET, MealPhase.PEAK)
+        )
+
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
             prediction=prediction,
@@ -207,6 +214,7 @@ def run_evaluation(
             minutes_since_meal_detected=minutes_since_meal,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
             jerk_mgdl_per_min3=jerk,
+            meal_active=meal_active,
         )
 
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
@@ -391,6 +399,14 @@ def run_closed_loop_evaluation(
     # ── SWARM meal detection timer ────────────────────────────────────────────
     meal_first_detected_step: int | None = None
 
+    # ── Meal-active latch: hold meal_active=True for N steps after last ONSET/PEAK
+    # Prevents a single noisy CGM reading from de-arming the meal detector mid-
+    # absorption, which would trigger the no-meal IOB ceiling while true glucose
+    # is still rising.  4 steps = 20 min is enough to bridge 1-2 noise steps
+    # without keeping the latch open long enough to re-arm after a full recovery.
+    _MEAL_ACTIVE_LATCH_STEPS = 4
+    _meal_active_latch: int = 0
+
     # Online ISF learning
     _ISF_LEARNING_HORIZON_STEPS = max(1, 60 // step_minutes)
     _ISF_MAX_OBS = 12
@@ -465,6 +481,8 @@ def run_closed_loop_evaluation(
             swarm_late_phase_dose_u=safety_thresholds.swarm_late_phase_dose_u,
             swarm_min_glucose_for_microbolus=safety_thresholds.swarm_min_glucose_for_microbolus,
             swarm_min_glucose_during_meal=safety_thresholds.swarm_min_glucose_during_meal,
+            swarm_fast_rise_roc_threshold=safety_thresholds.swarm_fast_rise_roc_threshold,
+            swarm_min_glucose_fast_rise=safety_thresholds.swarm_min_glucose_fast_rise,
         )
 
         signal, prediction, recommendation, classification = run_controller(controller_inputs)
@@ -488,6 +506,16 @@ def run_closed_loop_evaluation(
         jerk_cl = (current_acc_cl - _prev_acc_cl) / step_minutes
         _prev_acc_cl = current_acc_cl
 
+        _direct_meal_active = (
+            meal_signal is not None
+            and meal_signal.phase in (MealPhase.ONSET, MealPhase.PEAK)
+        )
+        if _direct_meal_active:
+            _meal_active_latch = _MEAL_ACTIVE_LATCH_STEPS
+        elif _meal_active_latch > 0:
+            _meal_active_latch -= 1
+        meal_active_cl = _direct_meal_active or (_meal_active_latch > 0)
+
         safety_inputs = build_safety_inputs(
             recommendation=recommendation,
             prediction=prediction,
@@ -499,6 +527,7 @@ def run_closed_loop_evaluation(
             minutes_since_meal_detected=minutes_since_meal,
             correction_factor_mgdl_per_unit=correction_factor_mgdl_per_unit,
             jerk_mgdl_per_min3=jerk_cl,
+            meal_active=meal_active_cl,
         )
         safety_decision, suspend_state, arming_state = evaluate_safety_stateful(
             inputs=safety_inputs,

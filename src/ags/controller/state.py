@@ -89,6 +89,10 @@ class ControllerInputs:
     # Micro-bolus glucose floor — main micro-bolus only fires above this.
     swarm_min_glucose_for_microbolus: float = 130.0
     swarm_min_glucose_during_meal: float = 120.0
+    # Fast-rise floor override: when ROC ≥ threshold and no meal confirmed yet,
+    # use a lower floor to allow early delivery before the meal detector fires.
+    swarm_fast_rise_roc_threshold: float = 2.6
+    swarm_min_glucose_fast_rise: float = 112.0
 
 
 @dataclass
